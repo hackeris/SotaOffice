@@ -16,12 +16,11 @@ node_modules/
 # web_engine HAR 整体:sync-engine.sh 从 hos_vscodium 同步 + 权限 trim 由 build-ohos.sh 重放
 web_engine/
 
-# entry libs:引擎启动器(sync-engine.sh)+ sidecar(build-app.sh)
+# entry libs:引擎启动器(sync-engine.sh)+ sidecar(build-genoffice.sh 复用 e37 交叉产物)
 entry/libs/
 
-# 自检 app 的可重建资产:wasm/sidecar 图标(build-app.sh;五件套源码入库)
-entry/src/main/resources/resfile/resources/app/wasm/
-entry/src/main/resources/resfile/resources/app/icon.png
+# GenOffice app 组装产物(≈110M,build-genoffice.sh 毁灭性重建;源=scripts/shim + .temp/genoffice)
+entry/src/main/resources/resfile/resources/
 
 # .temp = 临时研究素材区(用户定的纪律:克隆仓/POC 工作区/源副本,永不入库)
 .temp/

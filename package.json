@@ -1,0 +1,14 @@
+{
+  "name": "smartoffice-ohos",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GenOffice → HarmonyOS 移植工程(Electron-on-OHOS 壳 + 产物管线 + e2e)",
+  "type": "module",
+  "scripts": {
+    "build:ohos": "bash scripts/sync-engine.sh && bash scripts/build-genoffice.sh --no-build && bash scripts/build-ohos.sh",
+    "smoke": "node scripts/e2e/ohos-smoke.mjs"
+  },
+  "devDependencies": {
+    "ws": "^8.18.0"
+  }
+}

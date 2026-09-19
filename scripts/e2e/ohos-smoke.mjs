@@ -1,0 +1,107 @@
+// ohos-smoke.mjs —— M1 真机 e2e smoke 最小集(9333 CDP 通道,Playwright-Electron 不可用的替代)
+//
+// 正确命令:node scripts/e2e/ohos-smoke.mjs [suite…](缺省 all)
+//   suites: boot | home | markdown-edit | docs-open | docs-export-pdf | sheets-sidecar | pdf-wasm
+// 前置:真机已装已启动 app;hdc fport tcp:9333 tcp:9333 已建立
+// 依赖:根 package.json devDependencies.ws(正式仓自带,勿再借 .temp 解析)
+// 输出:逐用例 PASS/FAIL + JSON 汇总;任一 FAIL 退出码 1
+// 选择器来源:上游 e2e/home.spec.ts 稳定集(.home-hero/.quick-card×7/.tab-item)
+// 明确不做(入册 R7,M2):视觉基线/多窗口/MCP/AI 面板
+import { execFileSync } from 'node:child_process'
+import { createRequire } from 'node:module'
+const req = createRequire(new URL('../../package.json', import.meta.url))
+const WebSocket = req('ws')
+
+const HDC = process.env.HDC || '/apps/harmony/sdk/default/openharmony/toolchains/hdc'
+const TARGET = process.env.HDC_TARGET || '192.168.1.5:44959'
+const BASE = 'http://127.0.0.1:9333'
+
+const results = []
+const record = (name, ok, detail) => { results.push({ name, ok, detail }); console.error(`${ok ? 'PASS' : 'FAIL'} ${name} — ${detail}`) }
+
+async function targets() { return (await (await fetch(`${BASE}/json/list`)).json()).filter(t => t.type === 'page') }
+async function openWS(url) {
+  const ws = new WebSocket(url, { perMessageDeflate: false })
+  let seq = 0; const pending = new Map()
+  const send = (method, params = {}) => new Promise((res, rej) => { const id = ++seq; pending.set(id, { res, rej }); ws.send(JSON.stringify({ id, method, params })) })
+  ws.on('message', (d) => { const m = JSON.parse(d); if (m.id && pending.has(m.id)) { const p = pending.get(m.id); pending.delete(m.id); m.error ? p.rej(new Error(m.error.message)) : p.res(m.result) } })
+  await new Promise((res, rej) => { ws.on('open', res); ws.on('error', rej) })
+  return { ws, send, close: () => ws.close() }
+}
+const evalIn = async (c, expr) => (await c.send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true })).result.value
+const shell = (cmd) => execFileSync(HDC, ['-t', TARGET, 'shell', cmd], { encoding: 'utf8', timeout: 15000 })
+
+// ---------- 用例 ----------
+async function t_boot() {
+  const ts = await targets()
+  const home = ts.find(t => t.url.includes('index.html') || t.title.includes('GenOffice'))
+  record('boot', !!home, `targets=${ts.length};first=${ts[0]?.title ?? 'none'}|${ts[0]?.url ?? ''}`)
+}
+async function t_home() {
+  const ts = await targets()
+  const home = ts.find(t => !t.url.startsWith('genoffice-app://')) || ts[0]
+  const c = await openWS(home.webSocketDebuggerUrl)
+  const hero = await evalIn(c, `!!document.querySelector('.home-hero')`)
+  const cards = await evalIn(c, `document.querySelectorAll('.quick-card').length`)
+  const shot = await c.send('Page.captureScreenshot', { format: 'png' })
+  c.close()
+  record('home', hero && cards >= 5 && shot.data.length > 50 * 1024, `hero=${hero};quick-cards=${cards};shot=${Math.round(shot.data.length / 1024)}KB(b64)`)
+}
+async function t_markdown_edit() {
+  const ts = await targets()
+  const md = ts.find(t => t.url.startsWith('genoffice-app://markdown'))
+  if (!md) return record('markdown-edit', false, '无 markdown target(先在真机新建 markdown 文档)')
+  const c = await openWS(md.webSocketDebuggerUrl)
+  await c.send('Runtime.enable')
+  await evalIn(c, `(document.querySelector('.CodeMirror,[contenteditable="true"],textarea') ?? document.body).focus()`)
+  await c.send('Input.insertText', { text: '鸿蒙 smoke 中文输入' })
+  await new Promise(r => setTimeout(r, 500))
+  const got = await evalIn(c, `document.body.innerText.includes('鸿蒙 smoke 中文输入')`)
+  c.close()
+  record('markdown-edit', got, `Input.insertText 后 DOM 命中=${got}`)
+}
+async function t_docs_open() {
+  const ts = await targets()
+  const doc = ts.find(t => t.url.startsWith('genoffice-app://docs'))
+  record('docs-open', !!doc, doc ? `target=${doc.url.slice(0, 60)}` : '无 docs target(真机先打开一个 docx)')
+}
+async function t_docs_export_pdf() {
+  const ts = await targets()
+  const doc = ts.find(t => t.url.startsWith('genoffice-app://docs'))
+  if (!doc) return record('docs-export-pdf', false, '无 docs target')
+  const c = await openWS(doc.webSocketDebuggerUrl)
+  const pdf = await c.send('Page.printToPDF', { printBackground: true })
+  c.close()
+  const buf = Buffer.from(pdf.data, 'base64')
+  record('docs-export-pdf', buf.length > 100 * 1024 && buf.slice(0, 5).toString('latin1') === '%PDF-', `${Math.round(buf.length / 1024)}KB head=${buf.slice(0, 8).toString('latin1')}`)
+}
+async function t_sheets_sidecar() {
+  const ts = await targets()
+  const sheet = ts.find(t => t.url.startsWith('genoffice-app://sheets'))
+  if (!sheet) return record('sheets-sidecar', false, '无 sheets target(真机先建表并保存一次触发 sidecar)')
+  let log = ''
+  try { log = shell('cat /data/storage/el2/base/files/shim-log.txt') } catch (e) { log = `read-fail:${e.message}` }
+  const remap = log.includes('spawn remap hit')
+  let proc = ''
+  try { proc = shell('ps -ef | grep xlsx-sidecar | grep -v grep | head -2') } catch {}
+  record('sheets-sidecar', remap, `shim-log remap hit=${remap};proc=${proc ? 'alive' : 'not-running(未触发或已退出)'}`)
+}
+async function t_pdf_wasm() {
+  const ts = await targets()
+  const pdf = ts.find(t => t.url.startsWith('genoffice-app://pdf'))
+  if (!pdf) return record('pdf-wasm', false, '无 pdf target(真机先打开一个 PDF)')
+  const c = await openWS(pdf.webSocketDebuggerUrl)
+  const pages = await evalIn(c, `(() => { const m = document.body.innerText.match(/(\\d+)\\s*\\/\\s*\\d+/); return m ? m[0] : document.querySelectorAll('canvas').length })()`)
+  c.close()
+  record('pdf-wasm', !!pages, `页码/画布指示=${pages}`)
+}
+
+const SUITES = { 'boot': t_boot, 'home': t_home, 'markdown-edit': t_markdown_edit, 'docs-open': t_docs_open, 'docs-export-pdf': t_docs_export_pdf, 'sheets-sidecar': t_sheets_sidecar, 'pdf-wasm': t_pdf_wasm }
+const wanted = process.argv.slice(2).filter(a => !a.startsWith('-'))
+const run = wanted.length ? wanted : Object.keys(SUITES)
+for (const name of run) {
+  if (!SUITES[name]) { record(name, false, '未知用例'); continue }
+  try { await SUITES[name]() } catch (e) { record(name, false, `threw: ${e.message}`) }
+}
+console.log(JSON.stringify({ total: results.length, pass: results.filter(r => r.ok).length, results }, null, 1))
+process.exit(results.some(r => !r.ok) ? 1 : 0)

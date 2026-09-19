@@ -4,8 +4,9 @@
 # 正确命令:bash scripts/build-ohos.sh [--no-sign]
 # 正确目录:genoffice-ohos 仓库根(脚本内部自行 cd)
 # 产物:    entry/build/default/outputs/default/entry-default-signed.hap(或 unsigned)
-# 链路:    scripts/sync-engine.sh(引擎同步,一次性/升级时)→ scripts/build-app.sh(自检 app 资产)
-#          → 本脚本(ohpm install → hvigor assembleHap → 产物断言)
+# 链路:    scripts/sync-engine.sh(引擎同步,一次性/升级时)→ scripts/build-genoffice.sh
+#          (GenOffice 产物组装;--selfcheck 组装自检 app)→ 本脚本(ohpm→trim→hvigor→断言)
+#          注:旧 build-app.sh 已退役(逻辑并入 build-genoffice.sh --selfcheck)
 # 前提:    /apps/harmony(command-line-tools,hoa 容器内挂载);
 #          scripts/.signing.snippet(gitignore,签名注入片段;缺失则自动产出 unsigned)
 # 断言:    HAP 存在 + >200MB + 十八关键件全在包内(so×3/启动器×2/sidecar/resfile 资源/自检 app),
@@ -75,12 +76,21 @@ OUT_DIR="entry/build/default/outputs/default"
 HAP=$(ls "$OUT_DIR"/entry-default-*.hap 2>/dev/null | head -1)
 [ -n "$HAP" ] || { echo "FATAL: 未找到 HAP 产物(见 /tmp/genoffice-ohos-build.log)" >&2; exit 1; }
 SIZE=$(stat -c%s "$HAP")
-[ "$SIZE" -gt 100000000 ] || { echo "FATAL: HAP 异常($SIZE bytes,Electron 壳应 >200MB;小了说明 collectAllLibs/HAR 未收进)" >&2; exit 1; }
-echo "    HAP: $HAP ($SIZE bytes)"
+# 组装产物形态自动识别:GenOffice 主 bundle 存在 → GenOffice 版(≈330MB);否则自检版(≈220MB)
+APP_MODE=selfcheck
+[ -f "entry/src/main/resources/resfile/resources/app/out/main/index.js" ] && APP_MODE=genoffice
+MIN_SIZE=100000000
+[ "$APP_MODE" = "genoffice" ] && MIN_SIZE=300000000
+[ "$SIZE" -gt "$MIN_SIZE" ] || { echo "FATAL: HAP 异常($SIZE bytes < ${MIN_SIZE};collectAllLibs/HAR/产物组装疑点,mode=$APP_MODE)" >&2; exit 1; }
+echo "    HAP: $HAP ($SIZE bytes, mode=$APP_MODE)"
 
-# 清单 §1/§10 关键件断言:so 三件套 / 启动器 / resfile 资源 / 自检 app
+# 清单 §1/§10 关键件断言:so 三件套 / 启动器 / resfile 引擎资源(两种模式共有)
 # (缺任何一件 = 对应装载链断裂,勿带病交付)
-MANIFEST=$(unzip -l "$HAP")
+# 踩坑(2026-09-20):曾用 `echo "$MANIFEST" | grep -q` —— grep -q 命中即退出,echo 被
+# SIGPIPE,set -o pipefail 下整管道判非零 → GenOffice 版大清单(数百行)随机误报
+# "缺关键件"(每轮挂不同文件)。修法:清单落盘后 grep 文件,无管道。
+MANIFEST=/tmp/genoffice-ohos-hap-manifest.txt
+unzip -l "$HAP" > "$MANIFEST"
 for f in \
   "libs/arm64-v8a/libelectron.so" \
   "libs/arm64-v8a/libadapter.so" \
@@ -96,15 +106,36 @@ for f in \
   "resources/resfile/v8_context_snapshot.bin" \
   "resources/resfile/locales/zh-CN.pak" \
   "resources/resfile/resources/app/main-shim.mjs" \
-  "resources/resfile/resources/app/main.mjs" \
-  "resources/resfile/resources/app/preload.js" \
-  "resources/resfile/resources/app/wasm/pdfium.wasm" \
   ; do
-  echo "$MANIFEST" | grep -q " $f\$" || { echo "FATAL: HAP 缺关键件 $f(collectAllLibs/executableBinaryPaths/资产组装疑点)" >&2; exit 1; }
+  grep -q " $f\$" "$MANIFEST" || { echo "FATAL: HAP 缺关键件 $f(collectAllLibs/executableBinaryPaths/资产组装疑点)" >&2; exit 1; }
 done
+# 模式特有断言
+if [ "$APP_MODE" = "genoffice" ]; then
+  for f in \
+    "resources/resfile/resources/app/out/main/index.js" \
+    "resources/resfile/resources/app/out/preload/index.js" \
+    "resources/resfile/resources/app/out/renderer/index.html" \
+    "resources/resfile/resources/wasm/pdfium.wasm" \
+    "resources/resfile/resources/wasm/hb-subset.wasm" \
+    "resources/resfile/resources/modules/docs/preload/index.js" \
+    "resources/resfile/resources/modules/docs/renderer/index.html" \
+    "resources/resfile/resources/modules/sheets/preload/index.js" \
+    "resources/resfile/resources/modules/sheets/renderer/index.html" \
+    "resources/resfile/resources/modules/slides/renderer/index.html" \
+    "resources/resfile/resources/modules/pdf/renderer/index.html" \
+    "resources/resfile/resources/modules/markdown/renderer/index.html" \
+    "resources/resfile/resources/modules/html/renderer/index.html" \
+    ; do
+    grep -q " $f\$" "$MANIFEST" || { echo "FATAL: HAP 缺关键件 $f(build-genoffice.sh 组装疑点)" >&2; exit 1; }
+  done
+else
+  for f in "resources/resfile/resources/app/main.mjs" "resources/resfile/resources/app/preload.js" "resources/resfile/resources/app/wasm/pdfium.wasm"; do
+    grep -q " $f\$" "$MANIFEST" || { echo "FATAL: HAP 缺关键件 $f(自检 app 组装疑点)" >&2; exit 1; }
+  done
+fi
 # libelectron 体积断言:LFS 指针未拉取时只有 ~130 字节
-LE_SZ=$(echo "$MANIFEST" | grep "libelectron.so\$" | awk '{print $1}')
+LE_SZ=$(grep "libelectron.so\$" "$MANIFEST" | awk '{print $1}')
 [ "$LE_SZ" -gt 100000000 ] || { echo "FATAL: libelectron.so 仅 ${LE_SZ} bytes(疑似 LFS 指针文本)" >&2; exit 1; }
-echo "    关键件断言通过(引擎 so×3 + 启动器×2 + sidecar + resfile 资源 + 自检 app)"
+echo "    关键件断言通过(mode=$APP_MODE:引擎 so×3 + 启动器×2 + sidecar + resfile 资源 + app)"
 unzip -l "$HAP" | tail -3
 echo "==> 构建通过:$HAP"
