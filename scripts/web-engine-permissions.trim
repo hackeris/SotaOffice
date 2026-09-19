@@ -1,0 +1,40 @@
+    // [GenOffice trim 2026-09-20] VSCodium 38 条 → 9 条(用户决策:VSCodium 特有权限不带;
+    // 依据 PORT_DESIGN §4 + 安装实测 9568289=ACL 受限)。本片段由 build-ohos.sh 重放进
+    // web_engine/src/main/module.json5(sync-engine.sh 重同步原始版后自动恢复 trim)。
+    // ACL 待 M1 申请后加回:READ_WRITE_{DOWNLOAD,DOCUMENTS,DESKTOP}_DIRECTORY(文件直读,当前走 picker)
+    "requestPermissions": [
+      // ===== Electron 运行时 =====
+      {
+        "name": "ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY"
+      },
+      // ===== GenOffice 应用集(system_grant)=====
+      {
+        "name": "ohos.permission.INTERNET"
+      },
+      {
+        "name": "ohos.permission.GET_NETWORK_INFO"
+      },
+      {
+        "name": "ohos.permission.RUNNING_LOCK"
+      },
+      {
+        "name": "ohos.permission.PREPARE_APP_TERMINATE"
+      },
+      {
+        "name": "ohos.permission.FILE_ACCESS_PERSIST"
+      },
+      {
+        "name": "ohos.permission.GET_FILE_ICON"
+      },
+      {
+        "name": "ohos.permission.PRINT"
+      }
+      // [trim 2026-09-20 追加] READ_PASTEBOARD 在真机(API 26)同为 ACL 受限(9568289)。
+      // 办公场景核心权限 → 记入 M1 ACL 申请清单(与 READ_WRITE_*_DIRECTORY 同批)。
+      // POC 影响:自检 A4 clipboard.readText 预期降级(writeText 不受影响)。
+      // {
+      //   "name": "ohos.permission.READ_PASTEBOARD",
+      //   "reason": "$string:access_pasteboard",
+      //   "usedScene": { "abilities": ["FormAbility"], "when":"always" }
+      // }
+    ],

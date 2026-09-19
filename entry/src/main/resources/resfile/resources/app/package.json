@@ -1,0 +1,7 @@
+{
+  "name": "genoffice-selfcheck",
+  "version": "0.1.0",
+  "description": "GenOffice Electron-OHOS 最小自检 app(POC-0/3/4/5 真机疑点一页验完)",
+  "main": "./main-shim.mjs",
+  "type": "module"
+}

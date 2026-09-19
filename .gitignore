@@ -1,0 +1,24 @@
+# 签名配置(含材料路径与口令)——不入库(build-ohos.sh 从 template+snippet 重建)
+build-profile.json5
+scripts/.signing.snippet
+
+# 构建产物 / 可重建的同步产物(可复现原则:脚本一键重建,不入库)
+build/
+entry/build/
+oh_modules/
+entry/oh_modules/
+.hvigor/
+cxx/default/
+local.properties
+node_modules/
+*.log
+
+# web_engine HAR 整体:sync-engine.sh 从 hos_vscodium 同步 + 权限 trim 由 build-ohos.sh 重放
+web_engine/
+
+# entry libs:引擎启动器(sync-engine.sh)+ sidecar(build-app.sh)
+entry/libs/
+
+# 自检 app 的可重建资产:wasm/sidecar 图标(build-app.sh;五件套源码入库)
+entry/src/main/resources/resfile/resources/app/wasm/
+entry/src/main/resources/resfile/resources/app/icon.png

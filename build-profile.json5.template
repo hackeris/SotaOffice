@@ -1,0 +1,31 @@
+{
+  /* build-profile.json5 模板 —— 由 scripts/build-ohos.sh 消费:
+   *   缺 build-profile.json5 时自动 cp 本模板;存在 scripts/.signing.snippet(JSON,含
+   *   signingConfigs/ref 两段文本)则注入签名,否则删除占位行产出 unsigned HAP。
+   *
+   * 纪律(与 office 同款):签名材料路径与口令属本机私有信息,build-profile.json5 与
+   * scripts/.signing.snippet 均在 .gitignore(勿提交)。
+   * 签名材料(本机):/data/share/hap/.ohos/config/ 下 default_MagicFlow_*.{cer,p7b,p12}
+   * 与 comfyui 项目同款(bundleName 必须保持 app.fuqidian.magicflow 与证书一致)。
+   *
+   * 模块:entry(Electron 壳)+ web_engine(HAR,零改动搬自 hos_vscodium,scripts/sync-engine.sh 同步)
+   * 占位行:__SIGNING_CONFIGS__ / __SIGNING_REF__(无签名时被脚本删除)
+   */
+  "app": {
+    "__SIGNING_CONFIGS__"
+    "products": [
+      {
+        "name": "default",
+        "__SIGNING_REF__"
+        "targetSdkVersion": "6.1.0(23)",
+        "compatibleSdkVersion": "6.1.0(23)",
+        "runtimeOS": "HarmonyOS"
+      }
+    ],
+    "buildModeSet": [ { "name": "debug" }, { "name": "release" } ]
+  },
+  "modules": [
+    { "name": "entry", "srcPath": "./entry", "targets": [ { "name": "default", "applyToProducts": ["default"] } ] },
+    { "name": "web_engine", "srcPath": "./web_engine" }
+  ]
+}

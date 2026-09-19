@@ -1,0 +1,13 @@
+{
+  "string": [
+    { "name": "module_desc", "value": "GenOffice entry module(Electron on OHOS)" },
+    { "name": "EntryAbility_desc", "value": "GenOffice HarmonyOS port" },
+    { "name": "EntryAbility_label", "value": "GenOffice" },
+    { "name": "BrowserAbility_desc", "value": "GenOffice browser ability" },
+    { "name": "BrowserAbility_label", "value": "BrowserAbility" },
+    { "name": "StatusBarEntryAbility_desc", "value": "GenOffice status bar" },
+    { "name": "StatusBarEntryAbility_label", "value": "GenOfficeStatusBar" },
+    { "name": "StatelessAbility_desc", "value": "GenOffice stateless ability" },
+    { "name": "StatelessAbility_label", "value": "GenOffice" }
+  ]
+}

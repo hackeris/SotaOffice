@@ -1,0 +1,113 @@
+{
+  // Electron on OHOS 壳模块(依据 docs/ELECTRON_OHOS_CHECKLIST.md):
+  //  - 继承链:srcEntry→MyAbilityStage extends WebAbilityStage;abilities 三件套命名是引擎
+  //    kAbilityMap 硬约束(EntryAbility/StatelessAbility/TaskManagerAbility 按名 startAbility),勿改名
+  //  - executableBinaryPaths:注册可执行位,未注册会被 XPM 内核拦截(exec permission denied)
+  //  - extractNativeLibs:true + compressNativeLibs:false:dlopen/exec/mmap 的前提(清单 §2)
+  //  - 权限:全部在 web_engine HAR 的 module.json5(38 条)随 HAR 合并,本模块零声明;
+  //    kernel ACL 若调试证书 profile 不含,构建报错时按官方指引临时注释 HAR 内对应条目
+  //  - launchType specified + AppScope multiAppMode + WebAbilityStage.onAcceptWant = 多窗口三件套
+  "module": {
+    "name": "entry",
+    "type": "entry",
+    "srcEntry": "./ets/Application/AbilityStage.ets",
+    "description": "$string:module_desc",
+    "mainElement": "EntryAbility",
+    // 路线 A 目标形态:PC(2in1)优先 + 平板(与 fork web_engine HAR 的 deviceTypes 对齐;
+    // fork 当前不支持 phone——见 PORT_DESIGN D2)
+    "deviceTypes": ["tablet", "2in1"],
+    "executableBinaryPaths": [
+      { "path": "libs/arm64-v8a/electron" },
+      { "path": "libs/arm64-v8a/node" },
+      { "path": "libs/arm64-v8a/xlsx-sidecar" }
+    ],
+    "deliveryWithInstall": true,
+    "installationFree": false,
+    "extractNativeLibs": true,
+    "compressNativeLibs": false,
+    "pages": "$profile:main_pages",
+    "metadata": [
+      {
+        "name": "electron_exec_path_ohos",
+        "value": "/data/storage/el1/bundle/libs/arm64/electron"
+      }
+    ],
+    "abilities": [
+      {
+        "name": "EntryAbility",
+        "srcEntry": "./ets/entryability/EntryAbility.ets",
+        "description": "$string:EntryAbility_desc",
+        "icon": "$media:app_icon",
+        "label": "$string:EntryAbility_label",
+        "startWindowIcon": "$media:app_icon",
+        "startWindowBackground": "$color:start_window_background",
+        // [2026-09-20 修正] 多实例姿势参考 wineohos 实证:launchType=multiton(标准 ability 多实例),
+        // 不用 AppScope multiAppMode(那是"应用多开"资质,API 26 普通应用无 → specified+multiAppMode
+        // 组合被拒,hilog: Not support multi-instance)。
+        "launchType": "multiton",
+        "removeMissionAfterTerminate": true,
+        "exported": true,
+        "skills": [
+          {
+            "entities": [
+              "entity.system.home",
+              "entity.system.browsable"
+            ],
+            "actions": [
+              "action.system.home",
+              "ohos.want.action.viewData"
+            ],
+            "uris": []
+          }
+        ]
+      },
+      {
+        "name": "BrowserAbility",
+        "srcEntry": "./ets/entryability/BrowserAbility.ets",
+        "description": "$string:BrowserAbility_desc",
+        "startWindowIcon": "$media:app_icon",
+        "startWindowBackground": "$color:start_window_background",
+        "removeMissionAfterTerminate": true,
+        "exported": false,
+        "skills": [
+          {
+            "actions": [
+              "ohos.want.action.viewData"
+            ],
+            "uris": []
+          }
+        ]
+        // [trim 2026-09-20] 去掉 "process": ":browser" —— API 26 真机 StartAbilityError:-1 强嫌疑:
+        // 应用多进程(allowMultiProcess 默认 false)收紧,BrowserAbility/StatelessAbility 改跑主进程,
+        // 功能等价(引擎 kAbilityMap 按名 startAbility 不受影响)
+      },
+      {
+        "name": "StatelessAbility",
+        "srcEntry": "./ets/entryability/StatelessAbility.ets",
+        "description": "$string:StatelessAbility_desc",
+        "label": "$string:StatelessAbility_label",
+        "startWindowIcon": "$media:app_icon",
+        "startWindowBackground": "$color:start_window_background",
+        "launchType": "multiton",
+        "removeMissionAfterTerminate": true,
+        "exported": true
+      }
+    ],
+    "extensionAbilities": [
+      {
+        "name": "StatusBarEntryAbility",
+        "icon": "$media:app_icon",
+        "description": "$string:StatusBarEntryAbility_desc",
+        "type": "statusBarView",
+        "exported": false,
+        "srcEntry": "./ets/entryability/StatusBarEntryAbility.ets"
+      },
+      {
+        "name": "BrowserEmbeddedAbility",
+        "srcEntry": "./ets/extensionAbility/BrowserEmbeddedAbility.ets",
+        "type": "embeddedUI",
+        "exported": false
+      }
+    ]
+  }
+}

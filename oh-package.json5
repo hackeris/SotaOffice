@@ -1,0 +1,6 @@
+{
+  "modelVersion": "6.0.2",
+  "description": "GenOffice HarmonyOS port(路线 A:Electron-on-OHOS;当前为最小工程骨架,后续并入 web_engine HAR)",
+  "dependencies": {},
+  "devDependencies": {}
+}

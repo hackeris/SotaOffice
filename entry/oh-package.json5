@@ -1,0 +1,11 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "GenOffice entry 模块:Electron 壳(继承 web_engine 的 WebAbility/WebAbilityStage,清单 §2)",
+  "main": "",
+  "author": "",
+  "license": "",
+  "dependencies": {
+    "web_engine": "file:../web_engine"
+  }
+}

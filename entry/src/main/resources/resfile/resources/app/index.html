@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>GenOffice OHOS 自检</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font: 13px/1.5 "HarmonyOS Sans SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; background: #1e1f22; color: #dfe3e8; padding: 0 0 32px; -webkit-app-region: no-drag; }
+  .titlebar { -webkit-app-region: drag; height: 38px; background: #2b2d30; display: flex; align-items: center; padding: 0 14px; gap: 10px; font-weight: 600; }
+  .titlebar .url { font-weight: 400; font-size: 11px; color: #9da5b4; }
+  main { padding: 14px 18px; max-width: 1120px; margin: 0 auto; }
+  h2 { font-size: 14px; margin: 18px 0 8px; color: #7db4f8; }
+  .hint { font-size: 11px; color: #9da5b4; margin-bottom: 6px; }
+  .manual { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .manual label { display: flex; gap: 6px; align-items: center; background: #2b2d30; border-radius: 6px; padding: 6px 10px; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #323338; vertical-align: top; }
+  th { color: #9da5b4; font-weight: 600; font-size: 12px; }
+  td.id { white-space: nowrap; font-family: ui-monospace, monospace; font-size: 12px; }
+  td.state { font-weight: 700; white-space: nowrap; }
+  .PASS { color: #6bbf74; } .FAIL { color: #e06c60; } .RUN { color: #e5c07b; } .SKIP { color: #9da5b4; }
+  td.detail { font-family: ui-monospace, monospace; font-size: 11px; color: #b0b8c4; word-break: break-all; }
+  button { background: #365880; color: #fff; border: 0; border-radius: 6px; padding: 5px 12px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #46699a; }
+  #runAll { margin: 4px 0 10px; padding: 7px 18px; }
+</style>
+</head>
+<body>
+<div class="titlebar"><span>GenOffice Electron-OHOS 自检(POC-0/3/4/5)</span><span class="url" id="pageUrl"></span></div>
+<main>
+  <h2>窗口点亮即已验证</h2>
+  <div class="hint">本窗口可见 = 装载链全通(hvigor→HAP→XComponent→libadapter→libelectron→electron 启动器→main-shim→本页);本页经 <code>genoffice-app://</code> 加载 = scheme/protocol 管线通。</div>
+  <div class="hint" id="loadedUrl"></div>
+
+  <h2>人工观察项(勾选)</h2>
+  <div class="manual" id="manual">
+    <label><input type="checkbox">系统三键:本窗口 frame:false,应无三键(官方已知行为)</label>
+    <label><input type="checkbox">托盘图标出现在任务栏/状态区</label>
+    <label><input type="checkbox">中文输入法:下框可输入中文(IME 最大变数 L2.2)</label>
+    <label><input type="checkbox">中文字体渲染正常(标题无豆腐块)</label>
+  </div>
+  <input id="imeBox" placeholder="IME 测试输入框…" style="margin-top:8px;width:280px;padding:6px 8px;background:#2b2d30;color:#dfe3e8;border:1px solid #3a3d42;border-radius:6px">
+
+  <h2>自动自检项</h2>
+  <button id="runAll">全部运行</button>
+  <table id="tbl">
+    <thead><tr><th style="width:110px">项</th><th style="width:70px">状态</th><th>详情(疑点→结论)</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</main>
+<script>
+const ITEMS = [
+  ['probe',   'A1/A2 平台与单实例', 'shim 打桩前 rawPlatform / requestSingleInstanceLock 裸调行为 + electron/chrome/node 版本'],
+  ['env',     'A3 路径与沙箱',      'app.getPath 全家 / cwd / execPath / HOME / os.type'],
+  ['clipboard', 'A4 剪贴板',        'writeText→readText 往返 + readImage 不崩'],
+  ['printToPDF', 'A5 打印导出',     'webContents.printToPDF(纯 Chromium 管线;系统打印对话框另属 PrintAdapter TODO 半成品)'],
+  ['wco',     'A6 WCO 打桩',       'setTitleBarOverlay/setWindowButtonVisibility 打桩后调用不抛'],
+  ['sidecar', 'A7 spawn sidecar',  'spawn 静态 Rust 二进制(executableBinaryPaths + XPM 放行 + stdio 通路;POC-4 真机部分)'],
+  ['wasm',    'A8 wasm pdfium',    'init+LoadMemDocument+页数+文本提取(POC-5 真机 spot check;坚盾模式下 FAIL 属预期)'],
+  ['tray',    'A9 托盘',           'Tray 创建(官方:窗口显隐与托盘强绑定)'],
+  ['native-image', 'A10 图标解码', 'nativeImage.createFromPath'],
+]
+const tbody = document.querySelector('#tbl tbody')
+for (const [id, label, hint] of ITEMS) {
+  const tr = document.createElement('tr')
+  tr.innerHTML = `<td class="id">${label}<div style="color:#6b7280;font-size:10px">${hint}</div></td>
+    <td class="state" id="st-${id}">—</td>
+    <td class="detail" id="dt-${id}"></td>`
+  tbody.appendChild(tr)
+}
+document.getElementById('pageUrl').textContent = location.href
+const lu = document.getElementById('loadedUrl')
+lu.textContent = `本页 URL:${location.href}(非 file:// 即 protocol.handle 生效)`
+
+async function runOne(id) {
+  const st = document.getElementById(`st-${id}`), dt = document.getElementById(`dt-${id}`)
+  st.textContent = 'RUN…'; st.className = 'state RUN'; dt.textContent = ''
+  try {
+    const r = await window.selfcheck.run(id)
+    const ok = r?.ok !== false
+    st.textContent = ok ? 'PASS' : 'FAIL'; st.className = `state ${ok ? 'PASS' : 'FAIL'}`
+    dt.textContent = typeof r?.detail === 'string' ? r.detail : JSON.stringify(r, null, 1)
+  } catch (e) {
+    st.textContent = 'FAIL'; st.className = 'state FAIL'
+    dt.textContent = `invoke threw: ${e?.message || e}`
+  }
+}
+document.getElementById('runAll').onclick = async () => {
+  for (const [id] of ITEMS) { await runOne(id) }
+}
+runOne('probe')
+</script>
+</body>
+</html>
