@@ -22,3 +22,6 @@ entry/libs/
 # 自检 app 的可重建资产:wasm/sidecar 图标(build-app.sh;五件套源码入库)
 entry/src/main/resources/resfile/resources/app/wasm/
 entry/src/main/resources/resfile/resources/app/icon.png
+
+# .temp = 临时研究素材区(用户定的纪律:克隆仓/POC 工作区/源副本,永不入库)
+.temp/

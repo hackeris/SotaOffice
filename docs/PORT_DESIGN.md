@@ -128,8 +128,8 @@ MCP/CLI 生态(fork 上 `ELECTRON_RUN_AS_NODE` 已被 hos_vscodium 验证;届时
 
 | 资产 | 位置 | 用途 |
 |---|---|---|
-| **本工程(正式仓)** | **`/data/share/genoffice-ohos`**(git;2026-09-20 从 `.temp/` 正规化迁出) | Electron-OHOS 壳工程 + 文档 + 一键构建链 |
-| GenOffice 源 | `/data/share/smartoffice/.temp/genoffice` | 移植对象(保持干净) |
+| **本工程(正式仓)** | **`/data/share/smartoffice`**(git;`.temp/` 仅放临时研究素材,用户定的纪律) | Electron-OHOS 壳工程 + 文档 + 一键构建链 |
+| GenOffice 源 | `/data/share/smartoffice/.temp/genoffice` | 移植对象(临时副本,保持干净) |
 | POC-2 工作区 | `/data/share/smartoffice/.temp/genoffice-e37` | electron@37 适配清点(临时素材,不入库) |
 | 官方指导项目克隆 | `/data/share/smartoffice/.temp/ohos-sig-electron`(3.3G) | 官方文档/API 矩阵来源(临时素材) |
 | hos_vscodium | `/data/share/smartoffice/.temp/hos_vscodium` | web_engine HAR + entry 骨架 + shim/napi-dyn/签名脚本,整体搬用(sync-engine.sh 源) |
