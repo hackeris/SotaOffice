@@ -1,5 +1,5 @@
 // POC-5a:pdfium.wasm 在 Node 22 的 host 预验(与 fork 主进程同为 V8,行为跨架构一致)
-// 用法:cd genoffice-e37/apps/pdf && node ../../../genoffice-ohos/scripts/poc5-wasm-smoke.mjs
+// 用法:cd /data/share/smartoffice/.temp/genoffice-e37/apps/pdf && node /data/share/genoffice-ohos/scripts/poc5-wasm-smoke.mjs
 // 验证:init → _PDFiumExt_Init → LoadMemDocument → GetPageCount → 文本提取 → SaveAsCopy
 import { readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'

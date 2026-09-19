@@ -128,9 +128,12 @@ MCP/CLI 生态(fork 上 `ELECTRON_RUN_AS_NODE` 已被 hos_vscodium 验证;届时
 
 | 资产 | 位置 | 用途 |
 |---|---|---|
+| **本工程(正式仓)** | **`/data/share/genoffice-ohos`**(git;2026-09-20 从 `.temp/` 正规化迁出) | Electron-OHOS 壳工程 + 文档 + 一键构建链 |
 | GenOffice 源 | `/data/share/smartoffice/.temp/genoffice` | 移植对象(保持干净) |
-| POC-2 工作区 | `/data/share/smartoffice/.temp/genoffice-e37` | electron@37 适配清点(不入库产物) |
-| hos_vscodium | `/data/share/smartoffice/.temp/hos_vscodium` | web_engine HAR + entry 骨架 + shim/napi-dyn/签名脚本,整体搬用 |
+| POC-2 工作区 | `/data/share/smartoffice/.temp/genoffice-e37` | electron@37 适配清点(临时素材,不入库) |
+| 官方指导项目克隆 | `/data/share/smartoffice/.temp/ohos-sig-electron`(3.3G) | 官方文档/API 矩阵来源(临时素材) |
+| hos_vscodium | `/data/share/smartoffice/.temp/hos_vscodium` | web_engine HAR + entry 骨架 + shim/napi-dyn/签名脚本,整体搬用(sync-engine.sh 源) |
+| wineohos | `/data/share/wineohos` | 多实例姿势实证参考(launchType multiton) |
 | Pure Office | `/data/share/office` | 交叉编译工具链(core3d/ohos-arm64.toolchain.cmake)、deploy/验收链、文档方法论 |
 | OHOS SDK | `/data/share/ohos-sdk`(6.1.0,API 23) | NDK(sysroot/clang)、ets、toolchains(hdc) |
 | 构建容器 | `/data/share/run_hoa_container.sh`(docker ubuntu:26.04 + command-line-tools@/apps/harmony) | hvigor/ohpm 构建环境 |

@@ -1,5 +1,5 @@
 // POC-5b:harfbuzz.wasm(shaping)+ hb-subset.wasm(子集化)在 Node 22 的 host 预验
-// 用法:cd genoffice-e37/apps/pdf && node ../../../genoffice-ohos/scripts/poc5-hb-smoke.mjs
+// 用法:cd /data/share/smartoffice/.temp/genoffice-e37/apps/pdf && node /data/share/genoffice-ohos/scripts/poc5-hb-smoke.mjs
 // 调用链照抄 genoffice 真实用法(shaped-metrics.ts 裸 wasmExports / font-subset.ts)
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
