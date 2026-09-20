@@ -1,6 +1,6 @@
 # M1 验收表与 ACL 登记(M1_ACCEPTANCE)
 
-> 状态:**G0-G3 ✅ 首亮(2026-09-20)** · G4 进行中(0/7 级已过) · G5/G6 待做
+> 状态:**G0-G3 ✅ 首亮(2026-09-20)** · G4 进行中(0/7 级已过;2026-09-21 排障双坑已修,shim v6,见 PORT_DESIGN §11.6) · G5/G6 待做
 > 配套:PORT_DESIGN §11(G0-G3 工程记录与排障实录)、`scripts/e2e/ohos-smoke.mjs`、`scripts/web-engine-permissions.trim`
 > 纪律:每级人工操作 + CDP 证据双轨;截图归档 `docs/appendix/m1-screenshots/`;连续通过才进下一级
 
@@ -13,7 +13,7 @@
 | 0 | 壳/Home | CDP:home target 存在;`.home-hero` 非空;`.quick-card`=7;截图无豆腐块;菜单栏渲染(人工) | ✅ 2026-09-20 | `g4-0-home.png`:hero✓ cards=7 全中文;6 进程树;**原生菜单栏表现待观察(D6 风险)** |
 | 1 | markdown | 新建 → 中文输入 → 预览渲染 → 保存 → 重开;printToPDF 导出 | ⬜ | 已知:Home 树不自动刷新属预期(fs.watch 降级) |
 | 2 | html | 新建 → 预览/编辑切换 → 保存 .html → 导出 PDF | ⬜ | |
-| 3 | docs | 打开中文 docx → 渲染 → 编辑 → 另存 → 导出 PDF;**关 tab 回归**(tab-manager detach workaround,37 行为差) | ⬜ | fixtures:hdc file send 到 el2,经 Home 打开 |
+| 3 | docs | 打开中文 docx → 渲染 → 编辑 → 另存 → 导出 PDF;**关 tab 回归**(tab-manager detach workaround,37 行为差) | ⬜ | fixtures:hdc file send 到 el2,经 Home 打开;**已修:输入死区(shim 桩⑬ parking,hidden WebContentsView 在 fork 上拦截输入;uitest 验证 插入/审阅/开始/视图 全部可点 ✓)** |
 | 4 | pdf | 打开中文 PDF → pdfium.wasm 渲染 → 文本选择 → 导出;hb-subset 载入 | ⬜ | POC-5/A8 已验 wasm 链;坚盾模式 FAIL 属预期(登记不修) |
 | 5 | sheets | 新建 → 公式 → **存 xlsx 触发 sidecar**(shim-log `spawn remap hit` + ps 见进程)→ 重开 | ⬜ | renderer 已亮(首亮实证 Univer+中文工具栏) |
 | 6 | slides | 新建/打开 pptx → 画布(Konva)→ 文本编辑 → 导出 PDF → 全屏 | ⬜ | canvas GPU;字体表 |
@@ -51,7 +51,7 @@
 
 | 权限 | 用途 | M1 降级路径(已在跑) | 产品影响 |
 |---|---|---|---|
-| `ohos.permission.READ_PASTEBOARD` | 剪贴板读取 | readText 返回空(writeText 不受影响) | 应用外复制的内容粘不进来(读取侧) |
+| `ohos.permission.READ_PASTEBOARD` | 剪贴板读取 | readText 返回空(writeText 不受影响);**shim 桩⑭ 读侧静默(2026-09-21)**:未授权时 fork 走 @ohos.pasteboard 会触发系统弹窗,slides focus 轮询 probe 造成反复弹窗——桩把读侧 API 钉空,弹窗消除;**申请落地后需移除桩⑭**(shim 注释已标) | 应用外复制的内容粘不进来(读取侧) |
 | `ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY` | Documents 直读直写 | shim 桩:不可写时 `app.setPath('documents', el2/Documents)`;打开/保存走系统 picker | 默认保存目录在沙箱;Home 文件夹树扫不到用户真实文档 |
 | `ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY` | Download 直写 | 下载默认名落 el2 | 导出落点在沙箱 |
 | `ohos.permission.READ_WRITE_DESKTOP_DIRECTORY` | Desktop 直写 | 同上 | 同上 |
@@ -64,5 +64,5 @@
 
 1. AGC 提交 READ_PASTEBOARD + 三目录(办公场景理由);审批周期数周,**与开发并行**;
 2. 调试 profile(p7b)随 ACL 重发;覆盖安装报 9568332 时先 `bm uninstall`;
-3. `scripts/web-engine-permissions.trim` 加回对应条目 → 重装实测(shim 第⑦桩 documents 探测会自动改走系统目录,无需改代码);
+3. `scripts/web-engine-permissions.trim` 加回对应条目 → 重装实测(shim 第⑦桩 documents 探测会自动改走系统目录,无需改代码);READ_PASTEBOARD 落地后**需同步移除 shim 桩⑭(剪贴板读侧静默)**,否则系统剪贴板内容仍读不进来;
 4. 真机回归:自检 A4(clipboard)/ sheets 保存落点 / Home 文件夹树。

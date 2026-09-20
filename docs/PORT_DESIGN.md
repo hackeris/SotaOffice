@@ -242,7 +242,7 @@ MCP/CLI 生态(fork 上 `ELECTRON_RUN_AS_NODE` 已被 hos_vscodium 验证;届时
 - 踩坑:harfbuzzjs ≥1.x 源文件名 `harfbuzz-subset.wasm`,packaged 契约读 `hb-subset.wasm`(wasm-path.ts:37)→ 拷贝时改名;
 - `--selfcheck` A/B 排障通道:一键回 POC 自检已验证态(自检 app 源迁入 `scripts/selfcheck-app/`);旧 build-app.sh 退役。
 
-### 11.3 G2:main-shim v4(`scripts/shim/main-shim.mjs`)
+### 11.3 G2:main-shim v6(`scripts/shim/main-shim.mjs`)
 
 最终桩清单(顺序铁律:**全部在加载 out/main/index.js 之前**,bundle 顶层求值 resourcesPath/isPackaged):
 `platform='linux'` → `title 打桩` → `resourcesPath(天然正确即跳过)` → `HOME/XDG/TMPDIR+chdir(el2)` → `disable-renderer-sandbox` → `isPackaged 钉 true` → `documents 可写探测+降级 el2`(default-save-dir throw 点)→ `单实例恒 true` → `powerMonitor 吞异常` → `WCO 三 API` → `sidecar spawn 重映射(libs/arm64)` → `GO_SHIM_TRAY 预案` → `uncaught 先行` → `createRequire 加载 CJS bundle`。
@@ -267,7 +267,18 @@ MCP/CLI 生态(fork 上 `ELECTRON_RUN_AS_NODE` 已被 hos_vscodium 验证;届时
 - Sheets(genoffice-app://sheets):Univer 容器 + 中文工具栏完整("开始/插入/页面布局/公式/数据/审阅/视图 + Genspark AI");
 - 排障决策表七条未全用上——真凶 #1 不在任何预判里(CJS/ESM 形态问题),**零桩直载 + uncaught 同步落盘**的二分法是破局关键,已沉淀为标准动作。
 
-### 11.6 剩余
+### 11.6 G4 排障实录(2026-09-21,两坑;shim v5/v6)
+
+真机人工操作发现、CDP 与 `uitest uiInput`(系统级输入注入)双轨定位:
+
+| # | 症状 | 真凶 | 定位关键 | 修复(shim 桩) |
+|---|---|---|---|---|
+| 4 | **输入死区**:docs 打开后 ribbon"插入~视图"选项卡触屏/鼠标点不动;CDP 合成输入(mouse/touch)全部正常 | **fork 上 hidden 的 WebContentsView 仍参与命中测试拦截输入**。shell 有 spare sheets view 常驻 hidden(tab-manager `scheduleSpareSheetsView`,且每开一个 sheets tab 3s 后重建);切走的 tab 也 hidden;且 `activateTab` 只 `setBounds` active view,**非 active view 的 bounds 冻结在创建时刻** | ①uitest 点文件按钮 ✓ 点插入~视图 ✗(CDP 全 ✓)→ 系统输入专属;②三个 view 挂 pointerdown 监听:活区事件正确抵达(clientX 映射无损),死区事件**凭空消失**;③`dumpLayout` 控件树坐标正常(渲染完好,非 UI 问题);④注意 CDP `Input.*` 走 Chromium 内部**不代表**真实输入链路,排障必须用 uitest/hidumper 级证据 | **桩⑬ parking**:1s 周期把 `getVisible()===false` 的 view `setBounds` 移出屏幕(-30000);activateTab 恢复时会重设 bounds 不冲突。真机验证:插入/审阅/开始/视图 uitest 点击全部切换 ✓ |
+| 5 | **剪贴板反复弹窗**:打开 pptx 反复弹"无法访问系统剪贴板" | slides renderer 在 **mount+每次窗口 focus** 时 `clipboardProbe` → 主进程 `clipboard.availableFormats()/readText()` → fork 走 `@ohos.pasteboard`,READ_PASTEBOARD 未授权(ACL trim)触发**系统提示弹窗**;弹窗关闭→焦点回归→再 probe→**死循环**(非定时轮询,focus 驱动) | 文案不在任何 i18n(系统级);slides 源码仅 probe 一处主动读剪贴板;READ_PASTEBOARD 在 M1 ACL 裁剪清单内(M1_ACCEPTANCE §4.2) | **桩⑭ 读侧静默**:`availableFormats/readText/readImage/readBuffer/...` 返回空(与 ACL 裁剪后降级语义一致,本就读不到内容),`writeText` 保留。真机验证:开 pptx + 6 轮 tab 切换(focus 反复触发 probe)零弹窗 |
+
+**方法论沉淀**:renderer 内 DOM 层一切正常时,用 **CDP 合成输入与系统输入(uitest)的差异**切分问题域;`hidumper -s WindowManagerService -a '-a'`(窗口树/坐标)、`uitest dumpLayout`(控件树+bounds)是真机 UI 排障的标准探针。
+
+### 11.7 剩余
 
 - **G4** 逐模块操作验收:七级表见 `docs/M1_ACCEPTANCE.md`(0 已过);
 - **G5** e2e smoke 七用例:`scripts/e2e/ohos-smoke.mjs` 就位(ws 依赖已入正式仓);

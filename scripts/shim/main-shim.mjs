@@ -1,4 +1,4 @@
-// main-shim.mjs —— GenOffice on Electron-OHOS 兼容层(M1 版,v4 修复版)
+// main-shim.mjs —— GenOffice on Electron-OHOS 兼容层(M1 版,v6)
 //
 // 排障实录(hilog [GO-SHIM] 打点,2026-09-20 首亮):
 //   v1/v2 症状"死在 platform 桩"实为 console 缓冲丢失假象 + shim 自杀:
@@ -6,6 +6,19 @@
 //   → ESM 解析 → "exports is not defined" → shim catch 后 app.quit() → browser exited。
 //   v3(零桩直载)实锤上述;v4 修复:package.json 去 type:module(组装脚本)+ 桩全量回加
 //   + bundle 经 createRequire 以 CJS 加载。
+//   v5/v6(2026-09-21 G4 真机双坑, uitest uiInput 系统输入 + CDP 双轨定位):
+//   ⑤⑬ 输入死区:docs ribbon"插入~视图"选项卡对触屏/鼠标无响应(CDP 合成输入正常,
+//       事件在 fork 输入管线消失,所有 view 的 pointerdown 均未触发)。真凶:fork 上
+//       hidden 的 WebContentsView 仍参与命中测试(shell spare sheets view 常驻 hidden、
+//       切走的 tab hidden,且 tab-manager activateTab 只 setBounds active view,非 active
+//       bounds 冻结)。修复=桩⑬ parking:周期把 getVisible()===false 的 view setBounds
+//       移出屏幕;activateTab 恢复时会重设 bounds,不冲突。真机验证:插入/审阅/开始/视图
+//       全部 uitest 点击切换 ✓。
+//   ⑭ 剪贴板反复弹窗:打开 pptx 反复弹"无法访问系统剪贴板"。机制:slides renderer
+//       mount+focus 时 clipboardProbe → 主进程 clipboard.availableFormats()/readText()
+//       → fork 走 @ohos.pasteboard,READ_PASTEBOARD 未授权触发系统提示;弹窗关闭→
+//       focus 回归→再 probe→死循环。修复=桩⑭ 读侧静默(返回空,与 ACL 裁剪降级一致,
+//       写侧保留);真机验证:开 pptx + 6 轮 tab 切换零弹窗。
 // 桩清单顺序铁律:全部在加载 out/main/index.js 之前(bundle 顶层求值 resourcesPath/isPackaged)。
 import fs from 'node:fs'
 import path from 'node:path'
@@ -157,6 +170,55 @@ try {
   }
   log('stub: sidecar spawn remap installed')
 } catch (e) { log(`spawn remap 安装失败:${e?.message}`) }
+
+// ---- ⑬ hidden WebContentsView 移出屏幕(死区排查 2026-09-21)----
+// 症状:docs tab 打开后 ribbon"插入~视图"选项卡对系统输入(触屏/鼠标)无响应,
+//       CDP 合成输入正常;事件在 fork 输入管线中消失(所有 view 的 pointerdown 均未触发)。
+// 假设:fork 上 hidden 的 WebContentsView 仍参与命中测试拦截输入(tab-manager 有
+//       spare sheets view 常驻 hidden,且 activateTab 只 setBounds active view,
+//       非 active view 的 bounds 冻结在创建时刻——见 tab-manager.ts L394/L130)。
+// 手段:周期扫描把 visible=false 的 view 平移出屏幕(-30000),setBounds 在
+//       activateTab 恢复时会被 shell 重设,不冲突;观察死区是否消失以定真凶。
+try {
+  const { BrowserWindow } = await import('electron')
+  const PARK = { x: -30000, y: 0, width: 10, height: 10 }
+  const parkHidden = () => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      for (const v of win.contentView?.children ?? []) {
+        try { if (typeof v.getVisible === 'function' && !v.getVisible() && v.setBounds) v.setBounds(PARK) } catch {}
+      }
+    }
+  }
+  setInterval(parkHidden, 1000)
+  app.on('browser-window-created', () => setTimeout(parkHidden, 300))
+  log('stub: hidden-view parking installed(1s scan)')
+} catch (e) { log(`hidden-view parking 安装失败:${e?.message}`) }
+
+// ---- ⑭ 剪贴板读侧静默(pptx 反复弹窗排查 2026-09-21)----
+// 症状:打开 pptx 反复弹"无法访问系统剪贴板"。机制:slides renderer 在 mount+focus
+//       时调 clipboardProbe → 主进程 clipboard.availableFormats()/readText() →
+//       fork 走 @ohos.pasteboard,READ_PASTEBOARD 未授权时触发系统提示弹窗;
+//       弹窗关闭 → 窗口重新 focus → 又 probe → 死循环。
+// 手段:读侧桩空(与 ACL 裁剪后的降级语义一致),写侧保留;M2 申请下
+//       READ_PASTEBOARD 后按探测结果放行(见 M1_ACCEPTANCE §4)。
+try {
+  const { clipboard, nativeImage } = await import('electron')
+  if (clipboard) {
+    const emptyReturn = {
+      availableFormats: () => [],
+      readText: () => '',
+      readHTML: () => '',
+      readRTF: () => '',
+      readBuffer: () => Buffer.alloc(0),
+      readImage: () => (nativeImage ? nativeImage.createEmpty() : undefined),
+      has: () => false,
+    }
+    for (const [m, fn] of Object.entries(emptyReturn)) {
+      if (typeof clipboard[m] === 'function') { try { clipboard[m] = fn } catch {} }
+    }
+    log('stub: clipboard 读侧静默(availableFormats/readText/readImage/... → 空)')
+  }
+} catch (e) { log(`clipboard 桩安装失败:${e?.message}`) }
 
 // ---- ⑫(预案)Tray 兜底 ----
 if (process.env.GO_SHIM_TRAY === '1') {
