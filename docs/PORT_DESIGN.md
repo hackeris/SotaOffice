@@ -104,6 +104,7 @@
 | POC-7 | printToPDF / 菜单 / titleBarOverlay / 单实例 / IME 逐项摸底 → fork 能力缺口矩阵 | 待启动 |
 
 ### M1:PC 版可用(1~2 月)
+**状态(2026-09-20):主体进壳首亮成功(G0-G3,见 §11);剩 G4 逐模块验收 / G5 smoke / G6 收尾,表见 `docs/M1_ACCEPTANCE.md`。**
 Electron 37 适配(依 POC-2 清单)/ 文件打开保存另存 + 文件关联 / 打印 / 构建链固化(`scripts/ohos/*`,set -eo pipefail + 产物断言 + 毁灭性重建演练)/ 验收体系(启动参数门控 + 沙箱日志 + smoke 回归,替代不可用的 Playwright-Electron)。
 
 ### M2:产品化(1~2 月)
@@ -209,12 +210,66 @@ MCP/CLI 生态(fork 上 `ELECTRON_RUN_AS_NODE` 已被 hos_vscodium 验证;届时
 保留:kernel.ALLOW_WRITABLE_CODE_MEMORY(✅ 放行)、INTERNET、GET_NETWORK_INFO、RUNNING_LOCK、PREPARE_APP_TERMINATE、FILE_ACCESS_PERSIST、GET_FILE_ICON、PRINT。
 **M1 ACL 申请清单**(真机实测被拒,申请后加回):READ_PASTEBOARD(剪贴板读取,办公核心)、READ_WRITE_{DOWNLOAD,DOCUMENTS,DESKTOP}_DIRECTORY(三目录直读,当前走 picker)。
 
-### 10.4 人工观察项(待用户在设备上确认)
+### 10.4 人工观察项(✅ 用户已确认,2026-09-20)
 
-- 系统三键:frameless 无三键(截图证实右上无系统按钮,页面自绘标题栏)——符合官方已知行为;
-- 托盘图标视觉、中文 IME 输入框输入、窗口拖拽——需在设备上操作确认。
+- 系统三键:frameless 无三键——符合官方已知行为 ✅;
+- 托盘图标、中文 IME 输入、中文字体渲染——**全部符合,已勾选** ✅。
+- (POC 自检 app 的观察结论;GenOffice 本体的同项人工验证在 G4 逐模块验收中复确认。)
 
 **要素清单调研完成(2026-09-19)**:`docs/ELECTRON_OHOS_CHECKLIST.md` v2 定稿——
 - **[官]** openharmony-sig/electron 官方指导项目(克隆 `.temp/ohos-sig-electron`):13 件套产物清单、ACL 权限全集、托盘强绑定窗口、首窗口 metadata、HNP 方案、坚盾模式禁 JIT/wasm、`@electron-ohos/electron-builder`、1294 API 支持矩阵交叉验证(printToPDF/WebContentsView/protocol/dialog ✅;requestSingleInstanceLock/second-instance/setTitleBarOverlay ❌→shim 打桩);
 - **[实]** hos_vscodium 逐文件逆向(125 工具调用,含 so 字符串验证):collectAllLibs 语义、arm64-v8a→运行期 `/data/storage/el1/bundle/libs/arm64` 路径规则、CustomChildProcess.toString() 注册机制(白屏最易漏点)、kAbilityMap 按名 startAbility、dev_config.json 硬编码位置(9333 e2e 通道)、PrintAdapter TODO、GenOffice 筛除项(bash/zsh/rg、.node 别名、napi-dyn)。
 - 新风险入册:坚盾守护模式下 wasm 全禁(pdfium 三件套失效,M1 需检测降级)。
+
+---
+
+## 11. M1 主体进壳工程记录(2026-09-20,G0-G3 首亮成功)
+
+**里程碑:GenOffice(electron@37 分支)真实构建产物已装入 HAP 并在真机完整点亮**——Home 页全中文渲染、六模块 renderer(Sheets 实证 Univer)在线、9333 CDP 全程可用、6 进程树稳定。
+
+### 11.1 G0:构建源固化(.temp/genoffice)
+
+- 开 `ohos/electron37` 分支:pin electron 37.2.0(7 个 apps package.json + 根 package.json + lock,共 9 文件);pin diff 固化 `scripts/patches/genoffice-e37-pin.patch`(`git apply --check` 于干净 main 通过);分支纪律=只 cherry-pick 不 merge;
+- `npm ci` 踩坑(重现):electron postinstall 直连 GitHub 超时 → 绕法 = `npm ci --ignore-scripts` + `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ node node_modules/electron/install.js`;
+- build 前置:cargo 须在 PATH(`~/.cargo/bin`——sheets 的 `native:build` 会调,缺则 code 127);
+- `npm run build:all` 全绿(顺序 docs→sheets→slides→pdf→markdown→html→cli→shell)。产物实测:docs 27M / sheets 39M / slides 19M / pdf 9.6M / markdown 12M / html 8.5M / shell 19M。
+
+### 11.2 G1:产物管线(`scripts/build-genoffice.sh`)
+
+- 布局(与 resourcesPath 读取点对齐):`resfile/resources/{app(out/main+chunks 菜单PNG+preload×3+renderer), modules/<m>/{preload,renderer}, wasm/{pdfium,hb-subset}.wasm}`;
+- 死重裁剪:modules/*/out/main(standalone bundle,28.6M)、cli/(40M)、gsk/ 不装(M3);**组装实测 109M**(app 19 + modules 85 + wasm 5.1,与勘探账表 110M 吻合);
+- 断言:main 字段 / bundle>5MB / 六模块 preload+renderer / 死重已裁 / wasm 魔数 `\0asm` / 无 symlink / 无 node_modules 无 .ts / 体积 60~150M 区间;
+- 踩坑:harfbuzzjs ≥1.x 源文件名 `harfbuzz-subset.wasm`,packaged 契约读 `hb-subset.wasm`(wasm-path.ts:37)→ 拷贝时改名;
+- `--selfcheck` A/B 排障通道:一键回 POC 自检已验证态(自检 app 源迁入 `scripts/selfcheck-app/`);旧 build-app.sh 退役。
+
+### 11.3 G2:main-shim v4(`scripts/shim/main-shim.mjs`)
+
+最终桩清单(顺序铁律:**全部在加载 out/main/index.js 之前**,bundle 顶层求值 resourcesPath/isPackaged):
+`platform='linux'` → `title 打桩` → `resourcesPath(天然正确即跳过)` → `HOME/XDG/TMPDIR+chdir(el2)` → `disable-renderer-sandbox` → `isPackaged 钉 true` → `documents 可写探测+降级 el2`(default-save-dir throw 点)→ `单实例恒 true` → `powerMonitor 吞异常` → `WCO 三 API` → `sidecar spawn 重映射(libs/arm64)` → `GO_SHIM_TRAY 预案` → `uncaught 先行` → `createRequire 加载 CJS bundle`。
+
+**两个首亮实测修正(推翻勘探假设)**:
+- `process.resourcesPath` fork 默认值**天然正确** = `/data/storage/el1/bundle/entry/resources/resfile/resources`(正是组装目录)——桩改为"已对即跳过";对该属性 defineProperty 疑似触发 native 异常,勿轻碰;
+- shim 前奏保持最小(仅 import fs/path):顶部 import node:url/node:module + 探针组合曾伴随 native 退出(未定论因果,最小化后消失)——排障期任何新桩回加都应逐桩打点。
+
+### 11.4 G3:首亮排障实录(三个真凶,均已固化进脚本注释)
+
+| # | 真凶 | 机制 | 修复 |
+|---|---|---|---|
+| 1 | **CJS/ESM 之坑** | `out/main/index.js` 是 electron-vite 产 **CJS bundle**;组装的 package.json 带 `"type":"module"` → ESM 语境解析 → `ReferenceError: exports is not defined in ES module scope` → shim catch 后主动 quit(表象="The browser process has exited") | package.json 去 type:module(.mjs 后缀天然 ESM 不受影响)+ bundle 经 `createRequire` 加载 |
+| 2 | **console 缓冲假象** | v1/v2 hilog 打点显示"死在 platform 桩",实为进程退出时 console 缓冲未 flush 的错觉,误导二分方向 | uncaughtException handler 先行 + **文件日志为准**(shim-log 双写 el2 文件 + console);真死点靠 v3 零桩直载实锤 |
+| 3 | **断言 SIGPIPE 误报** | `echo 大清单 \| grep -q`(命中即退)× `set -o pipefail` → 清单大(数百行)后随机误报"缺关键件"(每轮挂不同文件) | `unzip -l` 落盘后 grep 文件,无管道 |
+
+### 11.5 首亮结果(G4-0 提前通过)
+
+- HAP **327,739,021 bytes / 670 files**(mode=genoffice,31 件关键件断言全过);
+- 进程树 6 进程(主 + GPU + renderer×N)稳定;CDP `/json/list` 双 target;
+- Home(file://):`.home-hero` ✓ + `.quick-card`×7 ✓ + 全中文("晚上好。准备好开始了吗?");截图 `docs/appendix/m1-screenshots/g4-0-home.png`;
+- Sheets(genoffice-app://sheets):Univer 容器 + 中文工具栏完整("开始/插入/页面布局/公式/数据/审阅/视图 + Genspark AI");
+- 排障决策表七条未全用上——真凶 #1 不在任何预判里(CJS/ESM 形态问题),**零桩直载 + uncaught 同步落盘**的二分法是破局关键,已沉淀为标准动作。
+
+### 11.6 剩余
+
+- **G4** 逐模块操作验收:七级表见 `docs/M1_ACCEPTANCE.md`(0 已过);
+- **G5** e2e smoke 七用例:`scripts/e2e/ohos-smoke.mjs` 就位(ws 依赖已入正式仓);
+- **G6** 毁灭性重建演练(rm web_engine+oh_modules+resfile/resources+build-profile → 三脚本全绿);
+- ACL 权限:ALLOW_WRITABLE_CODE_MEMORY 已有;其余避开并登记(`docs/M1_ACCEPTANCE.md` §4),M2 申请。

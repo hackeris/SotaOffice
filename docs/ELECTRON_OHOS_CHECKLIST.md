@@ -1,6 +1,6 @@
 # Electron on OHOS 基本要素清单(ELECTRON_OHOS_CHECKLIST)
 
-> 状态:**v2(官方侧 + hos_vscodium 逐文件实证侧均完整;POC-0 施工依据)**
+> 状态:**v3(官方侧 + hos_vscodium 实证 + M1 GenOffice 首亮实测修正;POC-0/M1 施工依据)**
 > 日期:2026-09-19
 > 目的:POC-0 一次搭对——按装载链分层列出 Electron-OHOS 应用必需/易漏要素,每要素标注 **必需性 / 位置 / 内容要点 / 缺失症状**。
 > 来源:
@@ -73,7 +73,7 @@
 | 要素 | 必需性 | 位置 | 内容要点 | 缺失症状 |
 |---|---|---|---|---|
 | `package.json` 的 `main` | **必需** | `resources/app/package.json` | ElectronMain 载入入口(GenOffice:main-shim.mjs);**必须是解包目录,不是 asar**([实]fork 对 resfile 下 asar 支持差) | 启动失败:找不到 main |
-| main-shim 六件事 | **必需(每件独立致命)** | main-shim.mjs | **[实]VSCodium 实证版**:① `process.platform→'linux'` ② `process.title` getter/setter 打桩(OHOS 无 setproctitle) ③ HOME/XDG/TMPDIR/SHELL/PATH 环境改造 + argv.json(含 `disable-chromium-sandbox`)+ chdir(el2/files,子进程只能 chdir 到 /data/storage 下) ④ powerMonitor 订阅吞异常(fork 缺 setListeningForShutdown,订阅即 abort) ⑤ WCO 三 API 打桩(setTitleBarOverlay/setWindowButtonVisibility/setWindowButtonPosition)+ 窗口控制 ipcMain ⑥ 主进程原生模块预加载(**VM 销毁后首次 dlopen .node 即 ecma_vm destructed abort**;GenOffice 零 napi 预计不需要,真机确认) + shim-log 落盘 | ①缺→启动即静默退出;③缺 disable-chromium-sandbox→沙箱初始化失败白屏;④缺→订阅 powerMonitor 时 native abort;⑥缺→"打开某功能几秒后闪退" |
+| main-shim 六件事 | **必需(每件独立致命)** | main-shim.mjs | **[实]VSCodium 实证版**:① `process.platform→'linux'` ② `process.title` getter/setter 打桩(OHOS 无 setproctitle) ③ HOME/XDG/TMPDIR/SHELL/PATH 环境改造 + argv.json(含 `disable-chromium-sandbox`)+ chdir(el2/files,子进程只能 chdir 到 /data/storage 下) ④ powerMonitor 订阅吞异常(fork 缺 setListeningForShutdown,订阅即 abort) ⑤ WCO 三 API 打桩(setTitleBarOverlay/setWindowButtonVisibility/setWindowButtonPosition)+ 窗口控制 ipcMain ⑥ 主进程原生模块预加载(**VM 销毁后首次 dlopen .node 即 ecma_vm destructed abort**;GenOffice 零 napi 预计不需要,真机确认) + shim-log 落盘;**GenOffice M1 实装版(十桩,含 isPackaged/documents 降级/sidecar spawn 重映射)以 `scripts/shim/main-shim.mjs` 为准,清单见 PORT_DESIGN §11.3** | ①缺→启动即静默退出;③缺 disable-chromium-sandbox→沙箱初始化失败白屏;④缺→订阅 powerMonitor 时 native abort;⑥缺→"打开某功能几秒后闪退" |
 | shim-log.txt | **必需(排障命脉)** | main-shim 写 `/data/storage/el2/base/files/shim-log.txt` | 六件事逐步打点 + out/main.js loaded/FAILED | 启动失败完全黑盒 |
 | `--user-data-dir` | **必需**(默认已合理) | fork CommandLineAdapter 默认 argv | `/data/storage/el2/base/files/`(el2 用户数据区);**[实]默认 argv 全套:`--use-gl=egl --enable-features=UseOzonePlatform --ozone-platform=ohos --enable-logging --no-zygote --force-renderer-accessibility=basic --disable-gpu-watchdog --disable-features=EnableDrDc`** | `--ozone-platform=ohos` 缺→Surface 对接失败黑屏;user-data-dir 缺→写不出沙箱即崩 |
 | `--bundle-installation-dir` | **必需** | WebWindow XComponent onLoad 注入 | 值=`getContext().resourceDir`(HAR resfile 合并后的运行期目录),pak/icudtl/snapshot/locales 全靠它定位 | [实]libelectron 资源初始化失败,启动崩溃 |
@@ -81,6 +81,8 @@
 | 命令行参数注入 | 调试期必需 | `web_engine/.../CommandLineAdapter.ets` | appendSwitch 入口(官方 README 写 WebWindow.ets/CommandLineAdapter 两处,以 fork 实际代码为准) | 参数不生效 |
 | 窗口三键(关闭/最小化/最大化) | **注意** | WebAbility.ets 初始状态 | frame:true 显示三键;frameless 无三键(想显示需改 WebAbility 初始状态) | frameless 窗口无系统三键(WCO 打桩的根因) |
 | 编译产物放置 | **必需** | `resources/app/` | **鸿蒙无编译环境,必须放编译好的 JS 产物**(不能放 TS);[实]node_modules 保留解包目录 + 放一个 28 字节空壳 `node_modules.asar`(`{"files":{}}`)防加载器误判 | — |
+| **主 bundle 模块形态(M1 实测)** | **必需** | app/package.json | **[M1]electron-vite 主 bundle 是 CJS——app package.json 禁带 `"type":"module"`**(否则 ESM 语境解析 → `exports is not defined` → 启动即退);shim 加载 bundle 用 **createRequire** 勿用 dynamic import;.mjs 后缀的 shim 自身不受包级 type 影响 | 启动即退,日志 "The browser process has exited"(参考 PORT_DESIGN §11.4 真凶#1) |
+| shim 排障法(M1 沉淀) | **调试期必需** | main-shim.mjs | **uncaughtException handler 先行 + 文件日志为准(shim-log 双写 el2 文件+console)**——退出时 console 缓冲丢失会造成"死在某桩"假象误导二分;卡死时零桩直载 bundle 二分定位;`process.resourcesPath` fork 天然正确勿 defineProperty(native 异常风险) | 打点"死在桩上"多为假象,真凶在更后面 |
 
 ---
 
