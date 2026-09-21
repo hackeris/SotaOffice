@@ -1,7 +1,7 @@
-    // [GenOffice trim 2026-09-20] VSCodium 38 条 → 9 条(用户决策:VSCodium 特有权限不带;
-    // 依据 PORT_DESIGN §4 + 安装实测 9568289=ACL 受限)。本片段由 build-ohos.sh 重放进
-    // web_engine/src/main/module.json5(sync-engine.sh 重同步原始版后自动恢复 trim)。
-    // ACL 待 M1 申请后加回:READ_WRITE_{DOWNLOAD,DOCUMENTS,DESKTOP}_DIRECTORY(文件直读,当前走 picker)
+    // [GenOffice trim 2026-09-20] 引擎原始 38 条 → 12 条(只保留 Electron 运行时
+    // 与 GenOffice 应用所需)。
+    // 本片段由 build-ohos.sh 重放进 web_engine/src/main/module.json5
+    // (sync-engine.sh 重同步原始版后自动恢复 trim)。
     "requestPermissions": [
       // ===== Electron 运行时 =====
       {
@@ -28,13 +28,29 @@
       },
       {
         "name": "ohos.permission.PRINT"
+      },
+      // ===== ACL 五件(sotaoffice 名下 AGC 申请中;审批落地前 HAP 装不上真机,属预期)=====
+      // READ_PASTEBOARD:user_grant,EntryAbility 启动即申请,授予须用户点头
+      {
+        "name": "ohos.permission.READ_PASTEBOARD",
+        "reason": "$string:access_pasteboard",
+        "usedScene": { "abilities": ["EntryAbility"], "when": "always" }
+      },
+      // 三目录:system_grant,装上即授予;shim 第⑦桩探测可写后自动切系统目录
+      // (HAR 模块权限必须带 reason,否则 hvigor 00303222)
+      {
+        "name": "ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY",
+        "reason": "$string:documents_dir",
+        "usedScene": { "abilities": ["EntryAbility"], "when": "always" }
+      },
+      {
+        "name": "ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY",
+        "reason": "$string:download_dir",
+        "usedScene": { "abilities": ["EntryAbility"], "when": "always" }
+      },
+      {
+        "name": "ohos.permission.READ_WRITE_DESKTOP_DIRECTORY",
+        "reason": "$string:desktop_dir",
+        "usedScene": { "abilities": ["EntryAbility"], "when": "always" }
       }
-      // [trim 2026-09-20 追加] READ_PASTEBOARD 在真机(API 26)同为 ACL 受限(9568289)。
-      // 办公场景核心权限 → 记入 M1 ACL 申请清单(与 READ_WRITE_*_DIRECTORY 同批)。
-      // POC 影响:自检 A4 clipboard.readText 预期降级(writeText 不受影响)。
-      // {
-      //   "name": "ohos.permission.READ_PASTEBOARD",
-      //   "reason": "$string:access_pasteboard",
-      //   "usedScene": { "abilities": ["FormAbility"], "when":"always" }
-      // }
     ],

@@ -1,6 +1,6 @@
 # 签名配置(含材料路径与口令)——不入库(build-ohos.sh 从 template+snippet 重建)
 build-profile.json5
-scripts/.signing.snippet
+scripts/.signing.snippet*
 
 # 构建产物 / 可重建的同步产物(可复现原则:脚本一键重建,不入库)
 build/

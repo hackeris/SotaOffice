@@ -41,30 +41,33 @@
 - [x] PORT_DESIGN §11(M1 工程记录)/ 本表 / 清单 §3 修订
 - [x] 一键入口核对:`npm run build:ohos`(sync-engine + build-genoffice --no-build + build-ohos;G4-G5 期间多轮实际使用)
 
-## 4. ACL 权限登记(用户决策 2026-09-20:**CODE ACL 已有,其余暂时避开,后续申请**)
+## 4. ACL 权限登记(更新 2026-09-22:包名定案 app.fuqidian.sotaoffice,ACL 五件申请中)
 
-### 4.1 已有
+### 4.1 包名/签名定案
 
-| 权限 | 状态 |
-|---|---|
-| `ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY` | ✅ 已有(MagicFlow 调试证书 profile 覆盖,真机放行——V8 JIT/wasm 依赖它,真机 A8 已证) |
+- **正式包名 `app.fuqidian.sotaoffice`**(用户定案 2026-09-22),ACL 五件以此名义在 AGC 申请。
+- 申请落地前的构建产 **unsigned HAP**(装不上真机,属预期);`scripts/.signing.snippet` 暂缺, WineHua 借名材料备份于 `scripts/.signing.snippet.winehua.bak`。
+- 借名实验结论(2026-09-22,勿再试):**ACL 资格 per-app,不能跨应用借用**——本机全部 profile 中 JIT 与 READ_PASTEBOARD 分属不同应用名下,无一套全齐;且安装期校验"声明权限必须在 profile ACL 内"(9568289)、`atm perm grant` 要求权限已被应用声明,两道门槛闭环,本地组合无解。
 
-### 4.2 待申请(**M2 时点**;M1 期间保持裁剪、降级路径运行)
+### 4.2 申请中(AGC,app.fuqidian.sotaoffice 名下;trim 已按终态声明)
 
-| 权限 | 用途 | M1 降级路径(已在跑) | 产品影响 |
+| 权限 | 类型 | 用途 | 等待期行为 |
 |---|---|---|---|
-| `ohos.permission.READ_PASTEBOARD` | 剪贴板读取 | readText 返回空(writeText 不受影响);**shim 桩⑭ 读侧静默(2026-09-21)**:未授权时 fork 走 @ohos.pasteboard 会触发系统弹窗,slides focus 轮询 probe 造成反复弹窗——桩把读侧 API 钉空,弹窗消除;**申请落地后需移除桩⑭**(shim 注释已标) | 应用外复制的内容粘不进来(读取侧) |
-| `ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY` | Documents 直读直写 | shim 桩:不可写时 `app.setPath('documents', el2/Documents)`;打开/保存走系统 picker | 默认保存目录在沙箱;Home 文件夹树扫不到用户真实文档 |
-| `ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY` | Download 直写 | 下载默认名落 el2 | 导出落点在沙箱 |
-| `ohos.permission.READ_WRITE_DESKTOP_DIRECTORY` | Desktop 直写 | 同上 | 同上 |
+| `kernel.ALLOW_WRITABLE_CODE_MEMORY` | ACL system_grant | V8 JIT/wasm,引擎级必需 | (申请续期;曾由 MagicFlow 档覆盖) |
+| `ohos.permission.READ_PASTEBOARD` | **user_grant** | 剪贴板读取 | shim 桩⑭ 探测式:未授权读侧静默(有界探测,不死循环);EntryAbility 启动即申请授权框 |
+| `READ_WRITE_DOCUMENTS_DIRECTORY` | ACL system_grant | Documents 直读直写 | shim 第⑦桩:不可写时落 el2/Documents |
+| `READ_WRITE_DOWNLOAD_DIRECTORY` | ACL system_grant | Download 直写 | 落 el2 |
+| `READ_WRITE_DESKTOP_DIRECTORY` | ACL system_grant | Desktop 直写 | 落 el2 |
+
+> 参考:pureoffice(app.fuqidian.pureoffice)名下 READ_PASTEBOARD 已在 AGC 获批(其调试档与生产档 p7b 均含),申请通道已验证可行。
 
 ### 4.3 永久裁剪(不申请,依据 PORT_DESIGN §4)
 
 `ACCESS_USER_FULL_DISK`、`READ_WRITE_USER_FILE`(沙箱+picker 够用)/ `kernel.LOAD_INDEPENDENT_LIBRARY`(D5 定稿:VSCodium CLI 专用)/ `CUSTOM_SANDBOX`(shim disable-renderer-sandbox)/ `ALLOW_EXTERNAL_NATIVE_CODE`(零 napi 模块)/ VSCodium 特有全家桶(ACCESS_BIOMETRIC、LOCATION×3、MICROPHONE、CAMERA、ACCESS_BLUETOOTH、CUSTOM_SCREEN_CAPTURE、SYSTEM_FLOAT_WINDOW、WINDOW_TOPMOST、PRIVACY_WINDOW、ACCESS_CERT_MANAGER、WEB_NATIVE_MESSAGING)。
 
-### 4.4 申请落地时的动作(备忘)
+### 4.4 profile 到位后的动作(备忘)
 
-1. AGC 提交 READ_PASTEBOARD + 三目录(办公场景理由);审批周期数周,**与开发并行**;
-2. 调试 profile(p7b)随 ACL 重发;覆盖安装报 9568332 时先 `bm uninstall`;
-3. `scripts/web-engine-permissions.trim` 加回对应条目 → 重装实测(shim 第⑦桩 documents 探测会自动改走系统目录,无需改代码);READ_PASTEBOARD 落地后**需同步移除 shim 桩⑭(剪贴板读侧静默)**,否则系统剪贴板内容仍读不进来;
-4. 真机回归:自检 A4(clipboard)/ sheets 保存落点 / Home 文件夹树。
+1. 新调试 profile(p7b)→ 写入 `scripts/.signing.snippet`(材料路径+口令),`rm build-profile.json5` 重建;
+2. trim 已含全部声明,无需再改;直接 `npm run build:ohos` → `bm install`(报 9568332 时先 `bm uninstall`);
+3. 真机回归:EntryAbility 授权框(READ_PASTEBOARD)→ shim 桩⑭ 探测通过(读侧恢复)→ 从系统应用复制内容粘贴进 GenOffice 端到端;三目录落点(shim 第⑦桩自动切系统目录,核对 downloads/desktop 是否同样自动);
+4. 若某条 ACL 未获批:从 trim 删除对应声明再构建(声明无 ACL 覆盖 = 9568289 装不上)。

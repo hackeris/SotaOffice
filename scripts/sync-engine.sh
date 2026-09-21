@@ -1,10 +1,10 @@
 #!/bin/bash
-# sync-engine.sh —— 从 hos_vscodium 同步 Electron-OHOS 引擎件到本工程(幂等,可重复执行)
+# sync-engine.sh —— 同步 Electron-OHOS 引擎件到本工程(幂等,可重复执行)
 #
-# 正确命令:bash scripts/sync-engine.sh [hos_vscodium源目录]
-# 正确目录:genoffice-ohos 仓库根(脚本内部自行定位)
+# 正确命令:bash scripts/sync-engine.sh [引擎源目录]
+# 正确目录:仓根(脚本内部自行定位)
 # 产物:    web_engine/ HAR(整体) + entry/libs/arm64-v8a 必需启动器
-# 用法:    hos_vscodium 有更新(web_engine 版本升级)后重跑本脚本再构建
+# 用法:    引擎源有更新(web_engine 版本升级)后重跑本脚本再构建
 #
 # 同步范围(依据 docs/ELECTRON_OHOS_CHECKLIST.md §11 筛除结论):
 #   1. web_engine/ 整体(rsync --delete 与源保持一致):
@@ -23,7 +23,7 @@
 #   - 运行期落盘路径是 libs/arm64(无 -v8a),本脚本只管源布局,路径规则见清单 §0
 set -eo pipefail
 
-SRC="${1:-/data/share/smartoffice/.temp/hos_vscodium}"
+SRC="${1:-/data/share/smartoffice/.temp/engine-ref}"
 DST="$(cd "$(dirname "$0")/.." && pwd)"
 
 [ -d "$SRC/web_engine" ] || { echo "FATAL: 源不存在: $SRC/web_engine" >&2; exit 1; }

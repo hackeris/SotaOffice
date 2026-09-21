@@ -88,7 +88,7 @@ log(`env: HOME=${process.env.HOME} cwd=${process.cwd()}`)
 
 const { app, powerMonitor, BrowserWindow, Tray, nativeImage } = await import('electron')
 
-// ---- ⑤b 禁 renderer 沙箱(必须 ready 前;GPU 起而 renderer 未起的对冲,VSCodium 同款)----
+// ---- ⑤b 禁 renderer 沙箱(必须 ready 前;GPU 起而 renderer 未起的对冲)----
 try { app.commandLine.appendSwitch('disable-renderer-sandbox'); log('stub: disable-renderer-sandbox') } catch {}
 
 // ---- ⑥ app.isPackaged 钉 true ----
@@ -194,13 +194,13 @@ try {
   log('stub: hidden-view parking installed(1s scan)')
 } catch (e) { log(`hidden-view parking 安装失败:${e?.message}`) }
 
-// ---- ⑭ 剪贴板读侧静默(pptx 反复弹窗排查 2026-09-21)----
-// 症状:打开 pptx 反复弹"无法访问系统剪贴板"。机制:slides renderer 在 mount+focus
-//       时调 clipboardProbe → 主进程 clipboard.availableFormats()/readText() →
-//       fork 走 @ohos.pasteboard,READ_PASTEBOARD 未授权时触发系统提示弹窗;
-//       弹窗关闭 → 窗口重新 focus → 又 probe → 死循环。
-// 手段:读侧桩空(与 ACL 裁剪后的降级语义一致),写侧保留;M2 申请下
-//       READ_PASTEBOARD 后按探测结果放行(见 M1_ACCEPTANCE §4)。
+// ---- ⑭ 剪贴板读侧探测(原"读侧静默";探测式改造 2026-09-22)----
+// READ_PASTEBOARD 未授权时,读侧任一调用都会触发系统提示弹窗;slides 在 mount+focus
+// 时 probe 剪贴板,弹窗关闭 → 窗口重新 focus → 又 probe → 死循环(2026-09-21)。
+// 故读侧先钉空,启动后按授权结果探测恢复:成功(EntryAbility 授权框已允许)→
+// 恢复原读侧;失败 → 重试一次(给授权框留时间)后钉死。写侧不受影响。
+// Node 侧无法直接访问 @ohos.pasteboard(napi 转发是 C++ 层),探测只能走
+// Electron clipboard 原生函数——它对授权态的成败就是可靠信号。
 try {
   const { clipboard, nativeImage } = await import('electron')
   if (clipboard) {
@@ -213,10 +213,37 @@ try {
       readImage: () => (nativeImage ? nativeImage.createEmpty() : undefined),
       has: () => false,
     }
+    const orig = {}
     for (const [m, fn] of Object.entries(emptyReturn)) {
-      if (typeof clipboard[m] === 'function') { try { clipboard[m] = fn } catch {} }
+      if (typeof clipboard[m] === 'function') {
+        orig[m] = clipboard[m]
+        try { clipboard[m] = fn } catch {}
+      }
     }
-    log('stub: clipboard 读侧静默(availableFormats/readText/readImage/... → 空)')
+    log('stub: clipboard 读侧静默(等待授权探测)')
+    // 判据:未授权读侧可能"返回空"而非抛错,与空剪贴板不可区分——自证式探针:
+    // 写侧(不受限)写入标记再读回,读到即授权生效。首次 8s(授权框已可操作),
+    // 失败 60s 后末次重试,仍失败钉死(有界,不复现 focus 死循环)。
+    const FIRST_MS = 8000, RETRY_MS = 60000, MARK = 'go-clip-probe'
+    const probe = (n) => {
+      try {
+        let text = orig.readText.call(clipboard)
+        if (!text) {
+          clipboard.writeText(MARK)
+          text = orig.readText.call(clipboard)
+        }
+        if (text) {
+          for (const [m, fn] of Object.entries(orig)) { try { clipboard[m] = fn } catch {} }
+          log(`stub: clipboard 授权探测通过(第${n}次),读侧已恢复`)
+          return
+        }
+        log(`stub: clipboard 探测未授权(第${n}次),读侧维持静默`)
+        if (n === 1) setTimeout(() => probe(2), RETRY_MS - FIRST_MS)
+      } catch (e) {
+        log(`stub: clipboard 探测异常(第${n}次):${e?.message || e}`)
+      }
+    }
+    app.whenReady().then(() => setTimeout(() => probe(1), FIRST_MS))
   }
 } catch (e) { log(`clipboard 桩安装失败:${e?.message}`) }
 

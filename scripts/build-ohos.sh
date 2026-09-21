@@ -40,9 +40,9 @@ if [ ! -f build-profile.json5 ] || [ "$1" = "--regen" ]; then
   fi
 fi
 
-echo "==> [1/4] web_engine 权限 trim 重放(VSCodium 38 条 → GenOffice 9 条;sync-engine.sh
-重同步会还原为原始 38 条,故构建前以 scripts/web-engine-permissions.trim 为准重放。
-踩坑实录:原始版含 ACL 受限权限,调试证书 profile 未覆盖 → 真机安装报 9568289)"
+echo "==> [1/4] web_engine 权限 trim 重放(引擎原始 38 条 → GenOffice 12 条;sync-engine.sh
+重同步会还原为原始版,故构建前以 scripts/web-engine-permissions.trim 为准重放。
+踩坑:原始版含 ACL 受限权限,签名 profile 未覆盖 → 真机安装报 9568289)"
 "$NODE_BIN" -e '
   const fs = require("fs");
   const f = "web_engine/src/main/module.json5";

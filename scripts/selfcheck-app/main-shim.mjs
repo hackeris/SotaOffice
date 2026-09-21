@@ -1,5 +1,4 @@
-// main-shim.mjs —— Electron on OHOS 兼容层(GenOffice 版,依据 ELECTRON_OHOS_CHECKLIST §3)
-// 参照 hos_vscodium main-shim 六件事裁剪;每件独立致命,勿精简。
+// main-shim.mjs —— Electron on OHOS 兼容层(自检版;桩件裁剪,每件独立致命,勿精简)
 //
 // 探测结果存 globalThis.__GO_PROBES__,main.mjs 的 selfcheck:probe handler 读取展示。
 import fs from 'node:fs'
@@ -34,7 +33,7 @@ try {
 } catch (e) { log(`stub-skip: process.title(${e?.message})`) }
 
 // ---- 3. HOME/XDG/TMPDIR 环境改造 + chdir ----
-// 沙箱规则:子进程只能 chdir 到 /data/storage 下;用户数据落 el2(VSCodium 同款布局)
+// 沙箱规则:子进程只能 chdir 到 /data/storage 下;用户数据落 el2
 const EL2 = '/data/storage/el2/base/files'
 const home = process.env.HOME && process.env.HOME.startsWith('/storage/Users/')
   ? process.env.HOME
@@ -70,7 +69,7 @@ app.releaseSingleInstanceLock = () => true
 log(`stub: single-instance(raw=${PROBES.rawSingleInstanceLock})`)
 
 // ---- 5. powerMonitor 订阅吞异常 ----
-// fork 缺 setListeningForShutdown,订阅即 native abort(VSCodium 实证)
+// fork 缺 setListeningForShutdown,订阅即 native abort(真机实证)
 try {
   const pm = (await import('electron')).powerMonitor
   for (const m of ['addListener', 'on', 'once', 'removeListener', 'off', 'prependListener']) {

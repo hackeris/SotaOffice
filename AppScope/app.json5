@@ -1,9 +1,9 @@
 {
   "app": {
-    // 复用 comfy(MagicFlow)的调试签名材料 → 包名必须与其一致(app.fuqidian.magicflow)。
-    // 未来独立上架时:换正式 bundleName + 用 devecocli signature generate 生成新材料,
-    // 并同步替换根 build-profile.json5 的 signingConfigs 路径。
-    "bundleName": "app.fuqidian.magicflow",
+    // 正式包名(用户定案 2026-09-22):app.fuqidian.sotaoffice。
+    // ACL 五件(JIT + READ_PASTEBOARD + 三目录)以此名义在 AGC 申请中;
+    // 调试 profile 审批通过前,构建产 unsigned HAP(装不上真机,属预期)。
+    "bundleName": "app.fuqidian.sotaoffice",
     "vendor": "example",
     "versionCode": 1000000,
     "versionName": "0.1.0",
