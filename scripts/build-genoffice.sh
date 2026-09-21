@@ -8,8 +8,10 @@
 #            modules/{docs,sheets,slides,pdf,markdown,html}/{preload,renderer}/  ← 裁掉 out/main 死重
 #            wasm/{pdfium,hb-subset}.wasm + THIRD-PARTY-NOTICES.txt
 # 链路:    sync-engine.sh(引擎)→ 本脚本(GenOffice app)→ build-ohos.sh(HAP+断言)
-# 前提:    --src 指向的 genoffice 仓在 ohos/electron37 分支(参考 e37 pin,patch 见
-#          scripts/patches/genoffice-e37-pin.patch);不指定 --no-build 则跑 npm run build:all
+# 前提:    --src 指向的 genoffice 仓(thirdparty/genoffice submodule)在 ohos/electron37
+#          分支;产物缺失时先重建:cd thirdparty/genoffice && npm ci(--ignore-scripts
+#          + ELECTRON_MIRROR=npmmirror 手动 install.js,cargo 须在 PATH) && npm run build:all;
+#          不指定 --no-build 则脚本内自动跑 npm run build:all
 # 断言:    main 字段/bundle>5MB/六模块 preload+renderer/死重已裁/wasm 头/无 symlink/
 #          无 node_modules 无 .ts;体积 60~150M 区间外告警;失败非零退出
 #
@@ -18,7 +20,7 @@
 set -eo pipefail
 
 cd "$(dirname "$0")/.."
-SRC="/data/share/smartoffice/.temp/genoffice"
+SRC="/data/share/smartoffice/thirdparty/genoffice"
 RES_DIR="entry/src/main/resources/resfile/resources"
 SELFCHECK_APP="scripts/selfcheck-app"
 KEEP_MAPS=0 DO_BUILD=1 MODE=genoffice

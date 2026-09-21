@@ -108,7 +108,20 @@
 Electron 37 适配(依 POC-2 清单)/ 文件打开保存另存 + 文件关联 / 打印 / 构建链固化(`scripts/ohos/*`,set -eo pipefail + 产物断言 + 毁灭性重建演练)/ 验收体系(启动参数门控 + 沙箱日志 + smoke 回归,替代不可用的 Playwright-Electron)。
 
 ### M2:产品化(1~2 月)
-触屏/平板适配 / 多窗口验证 / 崩溃治理(crash-hook + dlclose 规避)/ 性能 / 签名上架合规(Apache-2.0 + third-party notices)。
+触屏/平板适配 / 多窗口验证 / 崩溃治理(crash-hook + dlclose 规避)/ 性能 / 签名上架合规(Apache-2.0 + third-party notices)/ 依赖治理(submodule,见 §5.1)。
+
+### 5.1 依赖治理(submodule)
+
+第三方依赖一律以 submodule 引入 `thirdparty/`,固定 tag/commit,**不引用 `.temp/` 临时素材**:
+
+| 依赖 | remote(计划) | 基线 | 说明 |
+|---|---|---|---|
+| GenOffice 本体 | `github.com/hackeris/genoffice`(fork) | 分支 `ohos/electron37`,pin commit `339470d` | 上游 `genspark-ai/genoffice` 无推送权;基线 = 上游 316ded6 + 9 文件 electron pin(43.3.0→37.2.0)。fork 推送后打 release tag,submodule 改钉 tag |
+| electron 本体 | `github.com/hackeris/electron`(fork) | 分支 `electron-v37.2.0-openharmony`,`3af8ccb` | **引擎件正式来源**。产物 = fork 构建输出 `src/out/musl_64`(libelectron.so/libffmpeg.so/libadapter.so/electron/icudtl.dat/v8_context_snapshot.bin/resources.pak/locales,见其 README「输出结果」);CI 或本地构建产出后,经 sync-engine.sh 组装 web_engine HAR |
+
+- 构建脚本消费 `thirdparty/` 路径:`build-genoffice.sh` 默认 `--src thirdparty/genoffice`;`sync-engine.sh` 待引擎产物就绪后同样切换输入
+- `thirdparty/engine-ref`(不入库)= 集成方式参考源,仅参考 HAR 目录结构/启动器清单/ets 引擎层级,**其二进制产物不得作为交付来源**
+- 首次克隆:`git submodule update --init`(需 fork 已推送对应分支);electron 源仓含 LFS 文件,克隆时 `GIT_LFS_SKIP_SMUDGE=1` 跳过(仅构建 electron 本体时需要真实内容)
 
 ### M3(可选)
 MCP/CLI 生态(fork 上 `ELECTRON_RUN_AS_NODE` 已被 hos_vscodium 验证;届时补申请 LOAD_INDEPENDENT_LIBRARY)/ 手机形态再评估。

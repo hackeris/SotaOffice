@@ -1,0 +1,8 @@
+[submodule "thirdparty/genoffice"]
+	path = thirdparty/genoffice
+	url = https://github.com/hackeris/genoffice.git
+	branch = ohos/electron37
+[submodule "thirdparty/electron"]
+	path = thirdparty/electron
+	url = https://github.com/hackeris/electron.git
+	branch = electron-v37.2.0-openharmony

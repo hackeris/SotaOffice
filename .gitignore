@@ -19,8 +19,12 @@ web_engine/
 # entry libs:引擎启动器(sync-engine.sh)+ sidecar(build-genoffice.sh 复用 e37 交叉产物)
 entry/libs/
 
-# GenOffice app 组装产物(≈110M,build-genoffice.sh 毁灭性重建;源=scripts/shim + .temp/genoffice)
+# GenOffice app 组装产物(≈110M,build-genoffice.sh 毁灭性重建;源=thirdparty/genoffice)
 entry/src/main/resources/resfile/resources/
+
+# thirdparty/engine-ref = 集成方式参考源(HAR 结构与启动器清单),非本项目依赖,永不入库;
+# 正式依赖 = thirdparty/electron(electron 本体 submodule)的构建产物
+thirdparty/engine-ref/
 
 # .temp = 临时研究素材区(用户定的纪律:克隆仓/POC 工作区/源副本,永不入库)
 .temp/
