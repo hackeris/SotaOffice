@@ -2,8 +2,8 @@
 # m1-rebuild-drill.sh —— M1 毁灭性重建演练(构建可复现性证明,G6 收尾项)
 #
 # 正确命令:bash scripts/m1-rebuild-drill.sh
-# 前置:.temp/genoffice 七 out 产物在位(三脚本只做同步/组装/打包,不重编译 GenOffice);
-#       真实从零还需先在 genoffice 仓 npm ci + build:all(日常演练不触发)。
+# 前置:thirdparty/genoffice 七 out 产物在位(三脚本只做同步/组装/打包,不重编译 GenOffice);
+#       真实从零还需先在 thirdparty/genoffice 里 npm ci + npm run build:all(耗时长,日常演练不触发)。
 # 动作:rm web_engine/oh_modules/entry/build/resfile/resources/build-profile.json5
 #       → sync-engine → build-genoffice --no-build → build-ohos → 产物断言
 # 输出:全绿 = 可复现;任何一步失败非零退出(脚本可 tee 落盘后 grep 复盘)

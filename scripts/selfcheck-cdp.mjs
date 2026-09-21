@@ -1,14 +1,13 @@
 // selfcheck-cdp.mjs —— 真机自检远程执行器(9333 CDP 通道)
 //
-// 正确命令:NODE_PATH 无需;node scripts/selfcheck-cdp.mjs [wsUrl]
-// 正确目录:任意(ws 依赖从 genoffice-e37 解析——临时 POC 工作区;正式化后改本仓依赖)
+// 正确命令:node scripts/selfcheck-cdp.mjs [wsUrl]
+// 正确目录:仓根(ws 依赖从本仓根 package.json 解析)
 // 前提:    真机已装自检 HAP 并启动;hdc fport tcp:9333 tcp:9333 已建立
 // 用法:    连 genoffice-app://selfcheck 页面,逐项调用 window.selfcheck.run() 输出 JSON
 // 姊妹工具:Page.captureScreenshot 截图(同 ws 会话,见 PORT_DESIGN §10)
 import { createRequire } from 'node:module'
 
-// ws 从 POC-2 工作区解析(.temp 临时素材;正式依赖 M1 进本仓)
-const req = createRequire(process.env.GENOFFICE_E37 || '/data/share/smartoffice/.temp/genoffice-e37' + '/package.json')
+const req = createRequire(new URL('../package.json', import.meta.url))
 const WebSocket = req('ws')
 
 const WS = process.argv[2] || (await (await fetch('http://127.0.0.1:9333/json/list')).json())[0].webSocketDebuggerUrl
