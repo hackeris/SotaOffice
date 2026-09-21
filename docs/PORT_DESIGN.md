@@ -121,6 +121,20 @@ Electron 37 适配(依 POC-2 清单)/ 文件打开保存另存 + 文件关联 / 
 
 - 构建脚本消费 `thirdparty/` 路径:`build-genoffice.sh` 默认 `--src thirdparty/genoffice`;`sync-engine.sh` 默认源 `thirdparty/engine-ref`(过渡),产物就绪后换 `[产物目录]` 参数
 - **web_engine 适配层已自有化入本仓**(2026-09-22,用户定):`web_engine/` 的 ets/cpp 适配层、`module.json5`、资源串入库由 git 管理,仅忽略引擎二进制(libs 177M/resfile 18M/build);`sync-engine.sh` 只组装二进制、**绝不覆盖源码**;权限声明直接维护在 `web_engine/src/main/module.json5`(原 `web-engine-permissions.trim` 已固化删除,build-ohos.sh 改为校验必需声明+拦截未获批权限)
+- **产物来源规范(用户定 2026-09-22)**:任何构建产物,要么是本项目主体代码,要么作为三方依赖在 `thirdparty/` 维护。对照表:
+
+| 产物 | 来源 | 归属 |
+|---|---|---|
+| GenOffice app 产物(七 out/renderer、preload、main bundle) | `thirdparty/genoffice` 构建(`npm run build:all`) | 三方依赖 |
+| 引擎 so(libelectron/libadapter/libffmpeg)+ resfile 资源 | `thirdparty/electron` 构建产物(过渡期从 engine-ref 取同构件) | 三方依赖 |
+| electron/node/node.c 启动器 | 同上 | 三方依赖 |
+| `xlsx-sidecar` | `thirdparty/genoffice` Rust 源码交叉编译(build-genoffice.sh 自动触发) | 三方依赖 |
+| `pdfium.wasm` / `hb-subset.wasm` | `thirdparty/genoffice` 的 npm 依赖产物 | 三方依赖 |
+| `libc++_shared.so` | OHOS SDK(`native/llvm/lib/aarch64-linux-ohos`,官方指导来源) | 系统工具链 |
+| `dev_config.json`(9333 调试开关) | `sync-engine.sh` 生成 | 本项目 |
+| web_engine 适配层 / shim / 自检 app | 本仓 git | 本项目 |
+
+> `xlsx-sidecar` 交叉编译三坑(cargo 1.98 stable,实测 2026-09-22):①`CC_aarch64_unknown_linux_ohos` 给 cc crate 编 C 依赖(ironcalc→旧 zip→bzip2-sys/zstd-sys);②linker 须显式指 NDK clang,否则系统 ld 报 "Relocations in generic ELF";③`linker-flavor` 只能用稳定值 `gcc`(clang/gnu-cc 均 unstable)。
 - `thirdparty/engine-ref`(不入库)= 集成方式参考源,仅作过渡期二进制来源与集成参考,**其二进制产物不得作为交付来源**(过渡期例外,见上)
 - 首次克隆:`git submodule update --init`(需 fork 已推送对应分支);electron 源仓含 LFS 文件,克隆时 `GIT_LFS_SKIP_SMUDGE=1` 跳过(仅构建 electron 本体时需要真实内容)
 

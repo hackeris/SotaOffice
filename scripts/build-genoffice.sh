@@ -100,6 +100,35 @@ else
   cp -f entry/src/main/resources/base/media/app_icon.png "$RES_DIR/app/icon.png"
 fi
 
+echo "==> [3b/4] sidecar(xlsx Rust 引擎 → entry/libs;entry/module.json5 的
+executableBinaryPaths 硬性要求其在位,缺失则 hvigor PreBuild 报 00304069)"
+if [ "$MODE" = "genoffice" ]; then
+  SIDECAR_SRC="$SRC/apps/sheets/native/xlsx-engine"
+  SIDECAR_BIN="$SIDECAR_SRC/target/aarch64-unknown-linux-ohos/release/xlsx-sidecar"
+  SIDECAR_DST="entry/libs/arm64-v8a/xlsx-sidecar"
+  mkdir -p entry/libs/arm64-v8a
+  if [ ! -f "$SIDECAR_BIN" ]; then
+    # 交叉编译(约 50s). 三个坑(2026-09-22 实测,cargo 1.98/stable):
+    #   ① CC_aarch64_unknown_linux_ohos 给 cc crate 编 C 依赖(ironcalc→旧 zip→
+    #      bzip2-sys/zstd-sys),缺则 C 代码编译失败;
+    #   ② linker 必须显式指到 NDK clang,否则用系统 ld → "Relocations in generic ELF";
+    #   ③ linker-flavor 只能给稳定值 gcc(clang/gnu-cc 均 unstable 需 nightly)
+    NDK_CLANG="${OHOS_NDK_CLANG:-/apps/harmony/sdk/default/openharmony/native/llvm/bin/aarch64-unknown-linux-ohos-clang}"
+    [ -x "$NDK_CLANG" ] || { echo "FATAL: NDK clang 不存在: $NDK_CLANG" >&2; exit 1; }
+    echo "    交叉编译 aarch64-unknown-linux-ohos…"
+    (cd "$SIDECAR_SRC" && \
+      RUSTFLAGS="-C linker=$NDK_CLANG -C linker-flavor=gcc" \
+      CC_aarch64_unknown_linux_ohos="$NDK_CLANG" \
+      cargo build --release --target aarch64-unknown-linux-ohos >/tmp/xlsx-sidecar-build.log 2>&1) \
+      || { echo "FATAL: sidecar 交叉编译失败(见 /tmp/xlsx-sidecar-build.log)" >&2; exit 1; }
+  fi
+  [ -s "$SIDECAR_BIN" ] || { echo "FATAL: sidecar 产物缺失: $SIDECAR_BIN" >&2; exit 1; }
+  cp -f "$SIDECAR_BIN" "$SIDECAR_DST" && chmod +x "$SIDECAR_DST"
+  echo "    sidecar 就位($(stat -c%s "$SIDECAR_DST") bytes)"
+else
+  [ -x "entry/libs/arm64-v8a/xlsx-sidecar" ] || echo "    自检模式:entry/libs 无 sidecar(若 module.json5 声明了它,hvigor 会报错)"
+fi
+
 # 公共清理:map 文件(--keep-maps 保留)、符号链接(HAP zip 安全)、.ts 残留
 if [ "$KEEP_MAPS" = "0" ]; then find "$RES_DIR" -name "*.map" -type f -delete; fi
 SYMLINKS=$(find "$RES_DIR" -type l | head -3)

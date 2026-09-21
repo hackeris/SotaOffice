@@ -41,12 +41,20 @@ mkdir -p "$DST/web_engine/libs/arm64-v8a" "$DST/web_engine/src/main/resources/re
 cp -a "$SRC/web_engine/libs/arm64-v8a/." "$DST/web_engine/libs/arm64-v8a/"
 cp -a "$SRC/web_engine/src/main/resources/resfile/." "$DST/web_engine/src/main/resources/resfile/"
 
-echo "==> [2/3] 组装 entry libs 必需件"
+echo "==> [2/3] 组装 entry libs(electron 启动器 ← 引擎产物源;libc++_shared.so ← OHOS
+SDK(官方指导来源);dev_config.json ← 本仓生成)"
 mkdir -p "$DST/entry/libs/arm64-v8a"
-for f in electron node node.c libc++_shared.so dev_config.json; do
+for f in electron node node.c; do
   [ -f "$SRC/electron/libs/arm64-v8a/$f" ] || { echo "FATAL: 源缺件 $f" >&2; exit 1; }
   cp -f "$SRC/electron/libs/arm64-v8a/$f" "$DST/entry/libs/arm64-v8a/"
 done
+NDK_LIBCXX="${OHOS_NDK_LIBCXX:-/apps/harmony/sdk/default/openharmony/native/llvm/lib/aarch64-linux-ohos/libc++_shared.so}"
+[ -f "$NDK_LIBCXX" ] || { echo "FATAL: SDK libc++_shared.so 不存在: $NDK_LIBCXX" >&2; exit 1; }
+cp -f "$NDK_LIBCXX" "$DST/entry/libs/arm64-v8a/libc++_shared.so"
+# dev_config.json:libadapter.so 硬编码读 /data/storage/el1/bundle/libs/arm64/dev_config.json
+# (9333 远程调试通道开关;放 resfile 无效)
+printf '%s\n' '{' '  "remote-debugging": true,' '  "remote-debugging-port": 9333' '}' \
+  > "$DST/entry/libs/arm64-v8a/dev_config.json"
 
 echo "==> [3/3] 验收断言"
 [ -f "$DST/web_engine/libs/arm64-v8a/libelectron.so" ] || { echo "FATAL: libelectron.so 缺失" >&2; exit 1; }
