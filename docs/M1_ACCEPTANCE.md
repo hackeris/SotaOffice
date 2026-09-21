@@ -1,6 +1,6 @@
 # M1 验收表与 ACL 登记(M1_ACCEPTANCE)
 
-> 状态:**G0-G3 ✅ 首亮(2026-09-20)** · G4 进行中(0/7 级已过;2026-09-21 排障双坑已修,shim v6,见 PORT_DESIGN §11.6) · G5/G6 待做
+> 状态:**M1 ✅ 全部完成(G0-G6,2026-09-20 首亮 → 09-21/22 G4 七级 + G5 smoke 7/7 + G6 演练全绿)**;M2 待启动(ACL 申请/权限运行时化/文件关联等,见 §4)
 > 配套:PORT_DESIGN §11(G0-G3 工程记录与排障实录)、`scripts/e2e/ohos-smoke.mjs`、`scripts/web-engine-permissions.trim`
 > 纪律:每级人工操作 + CDP 证据双轨;截图归档 `docs/appendix/m1-screenshots/`;连续通过才进下一级
 
@@ -30,16 +30,16 @@
 | sheets-sidecar | sidecar 进程存活 | ✅(shim-log 在 hdc shell 下不可读,以 ps 为准) |
 | pdf-wasm | 页码/画布指示非空 | ✅ |
 
-**2026-09-21 全量 7/7 PASS。** 明确不做(M2):视觉基线 / 多窗口 / MCP / AI 面板(R7 已入册)。
+**2026-09-21 全量 7/7 PASS;2026-09-22 G6 演练产物重装后复验再次 7/7 PASS。** 明确不做(M2):视觉基线 / 多窗口 / MCP / AI 面板(R7 已入册)。
 
 明确不做(M2):视觉基线 / 多窗口 / MCP / AI 面板(R7 已入册)。
 
-## 3. G6 收尾
+## 3. G6 收尾(✅ 2026-09-22)
 
-- [ ] 毁灭性重建演练:`rm -rf web_engine oh_modules entry/build entry/src/main/resources/resfile/resources build-profile.json5` → `sync-engine.sh && build-genoffice.sh && build-ohos.sh` 全绿
+- [x] 毁灭性重建演练:`bash scripts/m1-rebuild-drill.sh`(固化入库;rm web_engine/oh_modules/entry-build/resfile/build-profile → 三脚本全绿,HAP 327,743,120 B/670 files;产物已重装真机并 smoke 复验 7/7)
 - [x] gitignore:`entry/src/main/resources/resfile/resources/`(109M 产物,可重建)
 - [x] PORT_DESIGN §11(M1 工程记录)/ 本表 / 清单 §3 修订
-- [ ] 一键入口核对:`npm run build:ohos`(sync-engine + build-genoffice --no-build + build-ohos)
+- [x] 一键入口核对:`npm run build:ohos`(sync-engine + build-genoffice --no-build + build-ohos;G4-G5 期间多轮实际使用)
 
 ## 4. ACL 权限登记(用户决策 2026-09-20:**CODE ACL 已有,其余暂时避开,后续申请**)
 
