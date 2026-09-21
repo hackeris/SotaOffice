@@ -1,5 +1,12 @@
-    // [GenOffice trim 2026-09-20] 引擎原始 38 条 → 12 条(只保留 Electron 运行时
-    // 与 GenOffice 应用所需)。
+{
+  "module": {
+    "name": "web_engine",
+    "type": "har",
+    "deviceTypes": [
+      "tablet",
+      "2in1"
+    ],
+    // [GenOffice trim 2026-09-20] VSCodium 38 条 → 12 条(VSCodium 特有权限不带)。
     // 本片段由 build-ohos.sh 重放进 web_engine/src/main/module.json5
     // (sync-engine.sh 重同步原始版后自动恢复 trim)。
     "requestPermissions": [
@@ -54,3 +61,13 @@
         "usedScene": { "abilities": ["EntryAbility"], "when": "always" }
       }
     ],
+    "definePermissions": [
+      {
+        "name": "ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY"
+      },
+      {
+        "name": "ohos.permission.LOCK_WINDOW_CURSOR"
+      }
+    ]
+  }
+}

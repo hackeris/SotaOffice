@@ -1,7 +1,8 @@
 # M1 验收表与 ACL 登记(M1_ACCEPTANCE)
 
 > 状态:**M1 ✅ 全部完成(G0-G6,2026-09-20 首亮 → 09-21/22 G4 七级 + G5 smoke 7/7 + G6 演练全绿)**;M2 待启动(ACL 申请/权限运行时化/文件关联等,见 §4)
-> 配套:PORT_DESIGN §11(G0-G3 工程记录与排障实录)、`scripts/e2e/ohos-smoke.mjs`、`scripts/web-engine-permissions.trim`
+> 配套:PORT_DESIGN §11(G0-G3 工程记录与排障实录)、`scripts/e2e/ohos-smoke.mjs`、`web_engine/src/main/module.json5`(权限声明,已自有化)
+> 变更(2026-09-22):web_engine 适配层自有化入本仓;`scripts/web-engine-permissions.trim` 已固化删除
 > 纪律:每级人工操作 + CDP 证据双轨;截图归档 `docs/appendix/m1-screenshots/`;连续通过才进下一级
 
 ---

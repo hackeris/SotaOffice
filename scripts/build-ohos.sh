@@ -5,7 +5,7 @@
 # 正确目录:genoffice-ohos 仓库根(脚本内部自行 cd)
 # 产物:    entry/build/default/outputs/default/entry-default-signed.hap(或 unsigned)
 # 链路:    scripts/sync-engine.sh(引擎同步,一次性/升级时)→ scripts/build-genoffice.sh
-#          (GenOffice 产物组装;--selfcheck 组装自检 app)→ 本脚本(ohpm→trim→hvigor→断言)
+#          (GenOffice 产物组装;--selfcheck 组装自检 app)→ 本脚本(权限校验→ohpm→hvigor→断言)
 #          注:旧 build-app.sh 已退役(逻辑并入 build-genoffice.sh --selfcheck)
 # 前提:    /apps/harmony(command-line-tools,hoa 容器内挂载);
 #          scripts/.signing.snippet(gitignore,签名注入片段;缺失则自动产出 unsigned)
@@ -40,27 +40,28 @@ if [ ! -f build-profile.json5 ] || [ "$1" = "--regen" ]; then
   fi
 fi
 
-echo "==> [1/4] web_engine 权限 trim 重放(引擎原始 38 条 → GenOffice 12 条;sync-engine.sh
-重同步会还原为原始版,故构建前以 scripts/web-engine-permissions.trim 为准重放。
-踩坑:原始版含 ACL 受限权限,签名 profile 未覆盖 → 真机安装报 9568289)"
+echo "==> [1/4] web_engine 权限校验(module.json5 已自有化入库,直接维护;
+权限决策与 ACL 登记见 docs/M1_ACCEPTANCE.md §4)"
 "$NODE_BIN" -e '
   const fs = require("fs");
-  const f = "web_engine/src/main/module.json5";
-  let t = fs.readFileSync(f, "utf8");
-  // 原始版特征:带引号的活跃权限声明(注释里的裸权限名不算——踩坑:首版用裸名检测,
-  // 撞上 trim 注释里列出的已删权限名,误报"重放失败")
-  const RAW = `"ohos.permission.ACCESS_BIOMETRIC"`;
-  if (t.includes(RAW)) {
-    const trim = fs.readFileSync("scripts/web-engine-permissions.trim", "utf8").trimEnd();
-    const re = /[ \t]*"requestPermissions":[\s\S]*?\n[ \t]*\],(?=\s*\n[ \t]*"definePermissions")/;
-    if (!re.test(t)) { console.error("FATAL: requestPermissions 替换锚点失配(web_engine 结构变化?)"); process.exit(1); }
-    t = t.replace(re, trim);
-    if (t.includes(RAW)) { console.error("FATAL: trim 重放失败"); process.exit(1); }
-    fs.writeFileSync(f, t);
-    console.log("    trim 已重放(38→9 条)");
-  } else {
-    console.log("    已是 trim 版,跳过");
+  const t = fs.readFileSync("web_engine/src/main/module.json5", "utf8");
+  // 必须声明的权限(缺 = 功能链断裂或签名 profile 与声明脱节)
+  for (const p of [
+    "ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY",
+    "ohos.permission.READ_PASTEBOARD",
+    "ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY",
+    "ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY",
+    "ohos.permission.READ_WRITE_DESKTOP_DIRECTORY",
+  ]) {
+    if (!t.includes(`"${p}"`)) { console.error(`FATAL: module.json5 缺声明 ${p}`); process.exit(1); }
   }
+  // 未获批的 ACL 受限权限不得声明(声明了但签名 profile 未覆盖 → 真机安装报 9568289)
+  for (const p of ["ACCESS_BIOMETRIC", "ACCESS_USER_FULL_DISK", "READ_WRITE_USER_FILE"]) {
+    if (new RegExp(`^[ \\t]*"name": "ohos.permission.${p}"`, "m").test(t)) {
+      console.error(`FATAL: module.json5 含未获批权限 ${p}(profile ACL 未覆盖则装机失败)`); process.exit(1);
+    }
+  }
+  console.log("    权限校验通过(5 项必需声明在位,未获批权限未出现)");
 '
 
 echo "==> [2/4] ohpm install(web_engine 依赖 inversify/reflect-metadata;hvigor 不会自动装——2026-09-19 踩坑:Cannot find module 'web_engine')"

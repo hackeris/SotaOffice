@@ -119,8 +119,9 @@ Electron 37 适配(依 POC-2 清单)/ 文件打开保存另存 + 文件关联 / 
 | GenOffice 本体 | `github.com/hackeris/genoffice`(fork) | 分支 `ohos/electron37`,pin commit `339470d` | 上游 `genspark-ai/genoffice` 无推送权;基线 = 上游 316ded6 + 9 文件 electron pin(43.3.0→37.2.0)。fork 推送后打 release tag,submodule 改钉 tag |
 | electron 本体 | `github.com/hackeris/electron`(fork) | 分支 `electron-v37.2.0-openharmony`,`3af8ccb` | **引擎件正式来源**。产物 = fork 构建输出 `src/out/musl_64`(libelectron.so/libffmpeg.so/libadapter.so/electron/icudtl.dat/v8_context_snapshot.bin/resources.pak/locales,见其 README「输出结果」);CI 或本地构建产出后,经 sync-engine.sh 组装 web_engine HAR |
 
-- 构建脚本消费 `thirdparty/` 路径:`build-genoffice.sh` 默认 `--src thirdparty/genoffice`;`sync-engine.sh` 待引擎产物就绪后同样切换输入
-- `thirdparty/engine-ref`(不入库)= 集成方式参考源,仅参考 HAR 目录结构/启动器清单/ets 引擎层级,**其二进制产物不得作为交付来源**
+- 构建脚本消费 `thirdparty/` 路径:`build-genoffice.sh` 默认 `--src thirdparty/genoffice`;`sync-engine.sh` 默认源 `thirdparty/engine-ref`(过渡),产物就绪后换 `[产物目录]` 参数
+- **web_engine 适配层已自有化入本仓**(2026-09-22,用户定):`web_engine/` 的 ets/cpp 适配层、`module.json5`、资源串入库由 git 管理,仅忽略引擎二进制(libs 177M/resfile 18M/build);`sync-engine.sh` 只组装二进制、**绝不覆盖源码**;权限声明直接维护在 `web_engine/src/main/module.json5`(原 `web-engine-permissions.trim` 已固化删除,build-ohos.sh 改为校验必需声明+拦截未获批权限)
+- `thirdparty/engine-ref`(不入库)= 集成方式参考源,仅作过渡期二进制来源与集成参考,**其二进制产物不得作为交付来源**(过渡期例外,见上)
 - 首次克隆:`git submodule update --init`(需 fork 已推送对应分支);electron 源仓含 LFS 文件,克隆时 `GIT_LFS_SKIP_SMUDGE=1` 跳过(仅构建 electron 本体时需要真实内容)
 
 ### M3(可选)
@@ -213,7 +214,7 @@ MCP/CLI 生态(fork 上 `ELECTRON_RUN_AS_NODE` 已被 hos_vscodium 验证;届时
 
 | # | 问题 | 症状/证据 | 修复 |
 |---|---|---|---|
-| T1 | **ACL 权限安装拦截** | `9568289 grant request permissions failed`:ACCESS_USER_FULL_DISK → READ_PASTEBOARD 逐条被拒(MagicFlow 调试证书 profile 的 ACL 覆盖有限;**kernel.ALLOW_WRITABLE_CODE_MEMORY 经 definePermissions 声明被放行**) | web_engine 权限 38→8 条 trim,固化 `scripts/web-engine-permissions.trim` + build-ohos.sh 构建前重放(sync-engine 还原后自动恢复 trim) |
+| T1 | **ACL 权限安装拦截** | `9568289 grant request permissions failed`:ACCESS_USER_FULL_DISK → READ_PASTEBOARD 逐条被拒(MagicFlow 调试证书 profile 的 ACL 覆盖有限;**kernel.ALLOW_WRITABLE_CODE_MEMORY 经 definePermissions 声明被放行**) | web_engine 权限 38→8 条 trim(M1 期);2026-09-22 适配层自有化后,权限直接维护 `web_engine/src/main/module.json5`(当前 12 条),build-ohos.sh 改为构建前校验 |
 | T2 | **multiAppMode 不被承认** | `launchType:"specified"` 启动被拒:hilog `[ability_util.h340] Not support multi-instance` → StartAbilityError:-1(API 26 普通应用无"应用多开"资质) | 参考 wineohos 实证:**删 multiAppMode,launchType 改 `multiton`**(标准 ability 多实例) |
 | T3 | 隐式启动匹配失败 | `aa start -b <bundle>` 报 2097199(implicit start;skills 匹配不上) | 显式 `-a EntryAbility` 启动成功;**桌面图标点击是否正常待用户确认**(走 home action 语义,待验),M1 修 skills |
 | T4 | trim 检测特征踩坑 | 首版脚本用裸权限名 `ACCESS_BIOMETRIC` 检测原始版,撞上 trim 注释里的已删权限名,误报"重放失败" | 改用带引号完整声明串 `"ohos.permission.ACCESS_BIOMETRIC"` 检测 |
