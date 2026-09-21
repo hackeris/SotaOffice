@@ -114,10 +114,12 @@ Electron 37 适配(依 POC-2 清单)/ 文件打开保存另存 + 文件关联 / 
 
 第三方依赖一律以 submodule 引入 `thirdparty/`,固定 tag/commit,**不引用 `.temp/` 临时素材**:
 
-| 依赖 | remote(计划) | 基线 | 说明 |
+| 依赖 | remote(fork) | release tag | 说明 |
 |---|---|---|---|
-| GenOffice 本体 | `github.com/hackeris/genoffice`(fork) | 分支 `ohos/electron37`,pin commit `339470d` | 上游 `genspark-ai/genoffice` 无推送权;基线 = 上游 316ded6 + 9 文件 electron pin(43.3.0→37.2.0)。fork 推送后打 release tag,submodule 改钉 tag |
-| electron 本体 | `github.com/hackeris/electron`(fork) | 分支 `electron-v37.2.0-openharmony`,`3af8ccb` | **引擎件正式来源**。产物 = fork 构建输出 `src/out/musl_64`(libelectron.so/libffmpeg.so/libadapter.so/electron/icudtl.dat/v8_context_snapshot.bin/resources.pak/locales,见其 README「输出结果」);CI 或本地构建产出后,经 sync-engine.sh 组装 web_engine HAR |
+| GenOffice 本体 | `github.com/hackeris/genoffice` | **`ohos-v1.0.0`** @ `339470d` | 上游 `genspark-ai/genoffice` 无推送权;tag = 上游 316ded6 + 9 文件 electron pin(43.3.0→37.2.0) |
+| electron 本体 | `github.com/hackeris/electron` | **`ohos-v37.2.0`** @ `3af8ccb` | **引擎件正式来源**;tag = 官方 fork 分支 `electron-v37.2.0-openharmony` HEAD。产物 = fork 构建输出 `src/out/musl_64`,经 sync-engine.sh 组装 web_engine HAR |
+
+> tag 已在本仓 submodule 本地创建(`git -C thirdparty/<x> describe --tags --exact-match` 校验),fork 推送时随分支一并推 tag;完整操作见 `thirdparty/VERSIONS.md`。
 
 - 构建脚本消费 `thirdparty/` 路径:`build-genoffice.sh` 默认 `--src thirdparty/genoffice`;`sync-engine.sh` 默认源 `thirdparty/engine-ref`(过渡),产物就绪后换 `[产物目录]` 参数
 - **web_engine 适配层已自有化入本仓**(2026-09-22,用户定):`web_engine/` 的 ets/cpp 适配层、`module.json5`、资源串入库由 git 管理,仅忽略引擎二进制(libs 177M/resfile 18M/build);`sync-engine.sh` 只组装二进制、**绝不覆盖源码**;权限声明直接维护在 `web_engine/src/main/module.json5`(原 `web-engine-permissions.trim` 已固化删除,build-ohos.sh 改为校验必需声明+拦截未获批权限)

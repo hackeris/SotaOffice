@@ -1,3 +1,5 @@
+# 版本锚定见 thirdparty/VERSIONS.md(submodule 钉 commit = 对应 release tag 指向)
+# genoffice: ohos-v1.0.0 / electron: ohos-v37.2.0
 [submodule "thirdparty/genoffice"]
 	path = thirdparty/genoffice
 	url = https://github.com/hackeris/genoffice.git
