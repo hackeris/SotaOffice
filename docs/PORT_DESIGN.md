@@ -278,6 +278,8 @@ MCP/CLI 生态(fork 上 `ELECTRON_RUN_AS_NODE` 已被 hos_vscodium 验证;届时
 
 **方法论沉淀**:renderer 内 DOM 层一切正常时,用 **CDP 合成输入与系统输入(uitest)的差异**切分问题域;`hidumper -s WindowManagerService -a '-a'`(窗口树/坐标)、`uitest dumpLayout`(控件树+bounds)是真机 UI 排障的标准探针。
 
+**另录 fork 已知缺陷(G4 期间发现,不阻塞,待上游)**:①`dialog.showSaveDialog` 的 `defaultPath` **文件名不回填**系统保存面板(目录项亦未生效)——导出/另存可用但用户需手输名字,导出实测 `exportPdf → {ok:true}` 落盘成功;②CDP `Page.printToPDF` 不存在(应用导出走主进程 `webContents.printToPDF`,实测可用——e2e smoke 的 docs-export-pdf 用例需改走应用 IPC)。
+
 ### 11.7 剩余
 
 - **G4** 逐模块操作验收:七级表见 `docs/M1_ACCEPTANCE.md`(0 已过);

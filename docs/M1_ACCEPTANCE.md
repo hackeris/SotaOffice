@@ -11,10 +11,10 @@
 | # | 目标 | 验收点 | 状态 | 证据/备注 |
 |---|---|---|---|---|
 | 0 | 壳/Home | CDP:home target 存在;`.home-hero` 非空;`.quick-card`=7;截图无豆腐块;菜单栏渲染(人工) | ✅ 2026-09-20 | `g4-0-home.png`:hero✓ cards=7 全中文;6 进程树;**原生菜单栏表现待观察(D6 风险)** |
-| 1 | markdown | 新建 → 中文输入 → 预览渲染 → 保存 → 重开;printToPDF 导出 | ⬜ | 已知:Home 树不自动刷新属预期(fs.watch 降级) |
+| 1 | markdown | 新建 → 中文输入 → 预览渲染 → 保存 → 重开;printToPDF 导出 | 🔶 | **CDP 自动轨 2026-09-21**:新建✓ TipTap 中文输入✓(无豆腐)exportPdf `{ok:true}`✓ 系统 picker✓,导出件经 Home 重开进 PDF 模块渲染✓;**待人工**:真机 IME 体验、WYSIWYG 语法转换(InputRules 需真实键盘);自动保存→重开 .md 闭环未跑;fork 缺陷:save dialog defaultPath 文件名不回填(§11.6) |
 | 2 | html | 新建 → 预览/编辑切换 → 保存 .html → 导出 PDF | ⬜ | |
-| 3 | docs | 打开中文 docx → 渲染 → 编辑 → 另存 → 导出 PDF;**关 tab 回归**(tab-manager detach workaround,37 行为差) | ⬜ | fixtures:hdc file send 到 el2,经 Home 打开;**已修:输入死区(shim 桩⑬ parking,hidden WebContentsView 在 fork 上拦截输入;uitest 验证 插入/审阅/开始/视图 全部可点 ✓)** |
-| 4 | pdf | 打开中文 PDF → pdfium.wasm 渲染 → 文本选择 → 导出;hb-subset 载入 | ⬜ | POC-5/A8 已验 wasm 链;坚盾模式 FAIL 属预期(登记不修) |
+| 3 | docs | 打开中文 docx → 渲染 → 编辑 → 另存 → 导出 PDF;**关 tab 回归**(tab-manager detach workaround,37 行为差) | 🔶 | fixtures:hdc file send 到 el2,经 Home 打开;**已修:输入死区(shim 桩⑬ parking,hidden WebContentsView 在 fork 上拦截输入;uitest 验证 插入/审阅/开始/视图 全部可点 ✓)**;全流程待跑 |
+| 4 | pdf | 打开中文 PDF → pdfium.wasm 渲染 → 文本选择 → 导出;hb-subset 载入 | 🔶 | **2026-09-21**:经 markdown 导出件打开✓ canvas×3(pdfium)✓ 中文文本层完整✓;待人工:文本选择/注释;坚盾模式 FAIL 属预期(登记不修) |
 | 5 | sheets | 新建 → 公式 → **存 xlsx 触发 sidecar**(shim-log `spawn remap hit` + ps 见进程)→ 重开 | ⬜ | renderer 已亮(首亮实证 Univer+中文工具栏) |
 | 6 | slides | 新建/打开 pptx → 画布(Konva)→ 文本编辑 → 导出 PDF → 全屏 | ⬜ | canvas GPU;字体表 |
 
