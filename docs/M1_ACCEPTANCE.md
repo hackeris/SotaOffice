@@ -12,11 +12,11 @@
 |---|---|---|---|---|
 | 0 | 壳/Home | CDP:home target 存在;`.home-hero` 非空;`.quick-card`=7;截图无豆腐块;菜单栏渲染(人工) | ✅ 2026-09-20 | `g4-0-home.png`:hero✓ cards=7 全中文;6 进程树;**原生菜单栏表现待观察(D6 风险)** |
 | 1 | markdown | 新建 → 中文输入 → 预览渲染 → 保存 → 重开;printToPDF 导出 | 🔶 | **CDP 自动轨 2026-09-21**:新建✓ TipTap 中文输入✓(无豆腐)exportPdf `{ok:true}`✓ 系统 picker✓,导出件经 Home 重开进 PDF 模块渲染✓;**待人工**:真机 IME 体验、WYSIWYG 语法转换(InputRules 需真实键盘);自动保存→重开 .md 闭环未跑;fork 缺陷:save dialog defaultPath 文件名不回填(§11.6) |
-| 2 | html | 新建 → 预览/编辑切换 → 保存 .html → 导出 PDF | ⬜ | |
-| 3 | docs | 打开中文 docx → 渲染 → 编辑 → 另存 → 导出 PDF;**关 tab 回归**(tab-manager detach workaround,37 行为差) | 🔶 | fixtures:hdc file send 到 el2,经 Home 打开;**已修:输入死区(shim 桩⑬ parking,hidden WebContentsView 在 fork 上拦截输入;uitest 验证 插入/审阅/开始/视图 全部可点 ✓)**;全流程待跑 |
-| 4 | pdf | 打开中文 PDF → pdfium.wasm 渲染 → 文本选择 → 导出;hb-subset 载入 | 🔶 | **2026-09-21**:经 markdown 导出件打开✓ canvas×3(pdfium)✓ 中文文本层完整✓;待人工:文本选择/注释;坚盾模式 FAIL 属预期(登记不修) |
-| 5 | sheets | 新建 → 公式 → **存 xlsx 触发 sidecar**(shim-log `spawn remap hit` + ps 见进程)→ 重开 | ⬜ | renderer 已亮(首亮实证 Univer+中文工具栏) |
-| 6 | slides | 新建/打开 pptx → 画布(Konva)→ 文本编辑 → 导出 PDF → 全屏 | ⬜ | canvas GPU;字体表 |
+| 2 | html | 新建 → 预览/编辑切换 → 保存 .html → 导出 PDF | ✅ 2026-09-21 | CodeMirror 中文源码✓ 预览/源码切换✓(iframe 渲染:h1/粗体/列表全对)exportPdf `{ok:true}`✓ |
+| 3 | docs | 打开中文 docx → 渲染 → 编辑 → 另存 → 导出 PDF;**关 tab 回归**(tab-manager detach workaround,37 行为差) | ✅ 2026-09-21 | ProseMirror 中文输入✓ 另存(状态栏"已保存")✓ **关 tab 回归✓**(判据=tab bar DOM;docs 走 teardown 不 close,orphan webContents 保留属上游设计)Home 重开解析渲染✓(48 字全回,字体未装自动替代提示)exportPdf `{ok:true}`✓;**输入死区已修**(shim 桩⑬) |
+| 4 | pdf | 打开中文 PDF → pdfium.wasm 渲染 → 文本选择 → 导出;hb-subset 载入 | ✅ 2026-09-21 | 经 markdown 导出件打开✓ canvas×3(pdfium)✓ 中文文本层完整✓ 工具栏全中文✓;待人工:文本选择/注释手感;坚盾模式 FAIL 属预期(登记不修) |
+| 5 | sheets | 新建 → 公式 → **存 xlsx 触发 sidecar**(shim-log `spawn remap hit` + ps 见进程)→ 重开 | ✅ 2026-09-21 | 自动保存开启→**ps 实证 `xlsx-sidecar` 进程运行**(Rust 引擎真机首验,spawn remap 桩工作)Home 重开 xlsx✓ |
+| 6 | slides | 新建/打开 pptx → 画布(Konva)→ 文本编辑 → 导出 PDF → 全屏 | ✅ 2026-09-21 | Konva canvas×3✓ addElement 中文文本框(数据层 nodes:1)✓ 文件→导出为 PDF(UI)→**自动打开导出件**(16:9 横页,PDF 模块渲染)✓ **全屏放映✓**(黑底 letterbox+页码)退出✓;剪贴板弹窗已修(桩⑭);字体选择器待人工观察(/system/fonts 缺口见 PORT_DESIGN 字体节) |
 
 ## 2. G5 e2e smoke(7 用例,`node scripts/e2e/ohos-smoke.mjs`)
 
