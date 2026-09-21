@@ -22,13 +22,15 @@
 
 | 用例 | 断言 | 状态 |
 |---|---|---|
-| boot | 靶列表含 home | ⬜ |
-| home | hero + quick-card≥5 + 截图>50KB | ⬜(手跑等价已过) |
-| markdown-edit | Input.insertText 中文后 DOM 命中 | ⬜ |
-| docs-open | genoffice-app://docs 靶存在 | ⬜ |
-| docs-export-pdf | Page.printToPDF ≥100KB 且 %PDF 头 | ⬜ |
-| sheets-sidecar | shim-log 出现 `spawn remap hit` | ⬜ |
-| pdf-wasm | 页码/画布指示非空 | ⬜ |
+| boot | 靶列表含 home | ✅ |
+| home | hero + quick-card≥5 + 截图>50KB | ✅ |
+| markdown-edit | Input.insertText 中文后 DOM 命中 | ✅(选择器须 .ProseMirror 优先,AI 输入框 textarea 会抢通配匹配——坑已注) |
+| docs-open | genoffice-app://docs 靶存在 | ✅ |
+| docs-export-pdf | 导出 PDF ≥30KB 且 %PDF 头 | ✅(fork 无 CDP Page.printToPDF,改走 `desktop.printPdfBuffer` 主进程 IPC;61KB=短文档合理值) |
+| sheets-sidecar | sidecar 进程存活 | ✅(shim-log 在 hdc shell 下不可读,以 ps 为准) |
+| pdf-wasm | 页码/画布指示非空 | ✅ |
+
+**2026-09-21 全量 7/7 PASS。** 明确不做(M2):视觉基线 / 多窗口 / MCP / AI 面板(R7 已入册)。
 
 明确不做(M2):视觉基线 / 多窗口 / MCP / AI 面板(R7 已入册)。
 

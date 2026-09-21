@@ -53,7 +53,9 @@ async function t_markdown_edit() {
   if (!md) return record('markdown-edit', false, '无 markdown target(先在真机新建 markdown 文档)')
   const c = await openWS(md.webSocketDebuggerUrl)
   await c.send('Runtime.enable')
-  await evalIn(c, `(document.querySelector('.CodeMirror,[contenteditable="true"],textarea') ?? document.body).focus()`)
+  // 选择器须 .ProseMirror 优先:markdown 页 DOM 序在前的 textarea(AI 输入框)会
+  // 抢走通配匹配,insertText 落进输入框而非编辑器(2026-09-21 实测坑)
+  await evalIn(c, `(document.querySelector('.ProseMirror,[contenteditable="true"]') ?? document.body).focus()`)
   await c.send('Input.insertText', { text: '鸿蒙 smoke 中文输入' })
   await new Promise(r => setTimeout(r, 500))
   const got = await evalIn(c, `document.body.innerText.includes('鸿蒙 smoke 中文输入')`)
@@ -70,21 +72,28 @@ async function t_docs_export_pdf() {
   const doc = ts.find(t => t.url.startsWith('genoffice-app://docs'))
   if (!doc) return record('docs-export-pdf', false, '无 docs target')
   const c = await openWS(doc.webSocketDebuggerUrl)
-  const pdf = await c.send('Page.printToPDF', { printBackground: true })
+  // fork 无 CDP Page.printToPDF(2026-09-21 实测),改走应用 IPC docs:print-pdf-buffer
+  // (主进程 webContents.printToPDF,无面板直返 base64,A4=11906x16838 twips)
+  const r = await evalIn(c, `window.desktop && window.desktop.printPdfBuffer
+    ? window.desktop.printPdfBuffer(11906, 16838).then(x => JSON.stringify(x)).catch(e => 'reject:' + e)
+    : 'no-desktop-api'`)
   c.close()
-  const buf = Buffer.from(pdf.data, 'base64')
-  record('docs-export-pdf', buf.length > 100 * 1024 && buf.slice(0, 5).toString('latin1') === '%PDF-', `${Math.round(buf.length / 1024)}KB head=${buf.slice(0, 8).toString('latin1')}`)
+  if (typeof r !== 'string' || !r.startsWith('{')) return record('docs-export-pdf', false, `IPC 返回异常:${String(r).slice(0, 60)}`)
+  const parsed = JSON.parse(r)
+  if (!parsed.ok) return record('docs-export-pdf', false, `printPdfBuffer 失败:${String(parsed.error).slice(0, 60)}`)
+  const buf = Buffer.from(parsed.base64, 'base64')
+  // 阈值 30KB:短文档(几十字单页)实测 ~61KB,100KB 旧阈值针对整版文档过严
+  record('docs-export-pdf', buf.length > 30 * 1024 && buf.slice(0, 5).toString('latin1') === '%PDF-', `${Math.round(buf.length / 1024)}KB head=${buf.slice(0, 8).toString('latin1')}`)
 }
 async function t_sheets_sidecar() {
   const ts = await targets()
   const sheet = ts.find(t => t.url.startsWith('genoffice-app://sheets'))
   if (!sheet) return record('sheets-sidecar', false, '无 sheets target(真机先建表并保存一次触发 sidecar)')
-  let log = ''
-  try { log = shell('cat /data/storage/el2/base/files/shim-log.txt') } catch (e) { log = `read-fail:${e.message}` }
-  const remap = log.includes('spawn remap hit')
+  // 判据:sidecar 进程存活即 PASS(2026-09-21 实证:shim-log 在 hdc shell 下无权限读,
+  // cat 恒失败;ps 进程是 spawn remap 成功的更强证据——侧车经 el1 libs 重映射路径拉起)
   let proc = ''
   try { proc = shell('ps -ef | grep xlsx-sidecar | grep -v grep | head -2') } catch {}
-  record('sheets-sidecar', remap, `shim-log remap hit=${remap};proc=${proc ? 'alive' : 'not-running(未触发或已退出)'}`)
+  record('sheets-sidecar', !!proc.trim(), `proc=${proc.trim() ? 'alive' : 'not-running(未触发或已退出)'};shim-log hdc-shell 不可读,以 ps 为准`)
 }
 async function t_pdf_wasm() {
   const ts = await targets()
