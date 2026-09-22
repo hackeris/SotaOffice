@@ -316,8 +316,8 @@ MCP/CLI 生态(fork 上 `ELECTRON_RUN_AS_NODE` 已被 hos_vscodium 验证;届时
 | CDP `Page.printToPDF` 不存在 | **不是缺陷**:CDP `Page.printToPDF` 仅 headless 可用(Chromium 固有设计,有头 Chrome 同样报 "Printing is not available");标准 Electron 亦然。正道是 `webContents.printToPDF`(已用) | 特性边界(查证) |
 | `media(hover:none)` 全能力置空 | **实测确证**(2026-09-23 二次复验,数据一致):UA 声明为 PC,却 `hoverNone:true` + `pointerCoarse/Fine:false` + `anyPointer*:false` + `maxTouchPoints:0` + `ontouchstart:false`——**自相矛盾**。根因:**fork 的 Chromium 未向 Blink 上报设备能力**(设备枚举缺失);**输入事件链路本身正常**(uitest 系统点击可正常操作应用),故为能力上报缺失而非输入失效。影响:CSS 响应式分支选错(hover 才显示的 UI、触屏优化尺寸) | 实测确证✓ / 可回馈上游 |
 | 关 docs tab 走 teardown 不 close | 证据是 GenOffice 源码注释(`tab-manager.ts:597`:"reproduced consistently... looks like an upstream WebContentsView/Chromium issue")——**桌面 Electron 上的复现**。**2026-09-23 本机补证**:复验 dlclose 时对 renderer 调 `window.close()` → **Home 页面卡死、窗口不销毁、CDP 无响应**(白屏,二次复现确证)——同为"窗口/WebContents 销毁流程 wedge UI"风险域,fork 上确实存在该缺陷(本机实证;应用源码无 renderer 可达的 `window.close()`,正常使用不触发,故 teardown 绕行方案必要且保持) | 上游复现 + **本机同类实证**✓ |
-| 退出 dlclose 崩溃 | **本项目从未实测**(来源为 MIGRATION_ISSUES 分析期预判)。2026-09-23 复验:force-stop 6 轮启停**零崩溃零残留**——但 force-stop 是 SIGKILL,**不走 dlclose**;优雅退出(app.quit)路径当前工具无法触发(见下条)。**结论仍为"未验证"** | 预判(未验证) |
-| **(新发现)窗口无关闭入口** | 无边框窗口(`titleBarStyle:hidden`)依赖 `setTitleBarOverlay` 提供系统窗口按钮——**fork 不支持该 API**(M1 已打桩);实测 Home 页面 DOM 无任何窗口控制按钮(仅"全部标签"),`window.close()` 对主窗口无效(Electron 规则)。**结果:用户无法通过应用 UI 退出应用**,只能从系统任务栏/多任务关闭。M2 窗口适配项 | 实测确证✓(产品问题) |
+| 退出 dlclose 崩溃 | **本项目实测未复现**(来源为 MIGRATION_ISSUES 分析期预判,疑似继承旧经验)。2026-09-23 实证:①force-stop 6 轮零崩溃零残留(SIGKILL 不走 dlclose);②**用户真机 Alt+F4 优雅退出**:系统日志 `Kill Reason: app exit` + **`exit with code: 0`**,无 CPPCrash/SIGSEGV——**优雅退出路径实测干净**。残余风险:未覆盖"多 tab + sidecar 运行中退出"的增强场景 | **实测未复现**(经验证伪) |
+| **(新发现)窗口无鼠标可达的关闭入口** | 无边框窗口(`titleBarStyle:hidden`)依赖 `setTitleBarOverlay` 提供系统窗口按钮——**fork 不支持该 API**(M1 已打桩);实测 Home 页面 DOM 无任何窗口控制按钮(仅"全部标签"),`window.close()` 对主窗口无效(Electron 规则)。**修正(2026-09-23 用户实测)**:**Alt+F4 键盘路径有效**(窗口正常关闭、应用优雅退出);缺的是**鼠标/触屏可点的按钮**——触屏用户无关闭入口。M2 窗口适配项(自绘窗口按钮或系统装饰) | 实测确证✓(触屏场景待适配) |
 
 ### 11.7 剩余
 
