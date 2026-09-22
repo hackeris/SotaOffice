@@ -36,30 +36,33 @@
       {
         "name": "ohos.permission.PRINT"
       },
-      // ===== ACL 五件(sotaoffice 名下 AGC 申请中;审批落地前 HAP 装不上真机,属预期)=====
-      // READ_PASTEBOARD:user_grant,EntryAbility 启动即申请,授予须用户点头
-      {
-        "name": "ohos.permission.READ_PASTEBOARD",
-        "reason": "$string:access_pasteboard",
-        "usedScene": { "abilities": ["EntryAbility"], "when": "always" }
-      },
+      // ===== ACL 五件(sotaoffice 名下 AGC 申请中;后续全面引入)=====
+      // [临时调试态 2026-09-22] READ_PASTEBOARD 暂注释:当前借 WineHua 档回归,
+      // 其 ACL 无此条(声明了装报 9568289);sotaoffice profile 到位后取消注释
+      // {
+      //   "name": "ohos.permission.READ_PASTEBOARD",
+      //   "reason": "$string:access_pasteboard",
+      //   "usedScene": { "abilities": ["EntryAbility"], "when": "always" }
+      // },
       // 三目录:system_grant,装上即授予;shim 第⑦桩探测可写后自动切系统目录
       // (HAR 模块权限必须带 reason,否则 hvigor 00303222)
-      {
-        "name": "ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY",
-        "reason": "$string:documents_dir",
-        "usedScene": { "abilities": ["EntryAbility"], "when": "always" }
-      },
-      {
-        "name": "ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY",
-        "reason": "$string:download_dir",
-        "usedScene": { "abilities": ["EntryAbility"], "when": "always" }
-      },
-      {
-        "name": "ohos.permission.READ_WRITE_DESKTOP_DIRECTORY",
-        "reason": "$string:desktop_dir",
-        "usedScene": { "abilities": ["EntryAbility"], "when": "always" }
-      }
+      // [临时调试态 2026-09-22] 借 MagicFlow 档(ACL 仅 JIT),三目录均无覆盖 → 全注释;
+      // sotaoffice profile 到位后取消注释(声明但 ACL 无覆盖 = 安装报 9568289)
+      // {
+      //   "name": "ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY",
+      //   "reason": "$string:documents_dir",
+      //   "usedScene": { "abilities": ["EntryAbility"], "when": "always" }
+      // },
+      // {
+      //   "name": "ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY",
+      //   "reason": "$string:download_dir",
+      //   "usedScene": { "abilities": ["EntryAbility"], "when": "always" }
+      // },
+      // {
+      //   "name": "ohos.permission.READ_WRITE_DESKTOP_DIRECTORY",
+      //   "reason": "$string:desktop_dir",
+      //   "usedScene": { "abilities": ["EntryAbility"], "when": "always" }
+      // }
     ],
     "definePermissions": [
       {

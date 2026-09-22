@@ -1,9 +1,8 @@
 {
   "app": {
-    // 正式包名(用户定案 2026-09-22):app.fuqidian.sotaoffice。
-    // ACL 五件(JIT + READ_PASTEBOARD + 三目录)以此名义在 AGC 申请中;
-    // 调试 profile 审批通过前,构建产 unsigned HAP(装不上真机,属预期)。
-    "bundleName": "app.fuqidian.sotaoffice",
+    // [临时调试态 2026-09-22] 借 MagicFlow 档(ACL 仅 JIT,与 M1 同款)真机回归;
+    // 正式包名 app.fuqidian.sotaoffice 待 AGC profile 到位后切回。
+    "bundleName": "app.fuqidian.magicflow",
     "vendor": "example",
     "versionCode": 1000000,
     "versionName": "0.1.0",
