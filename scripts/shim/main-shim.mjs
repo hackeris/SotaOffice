@@ -247,6 +247,36 @@ try {
   }
 } catch (e) { log(`clipboard 桩安装失败:${e?.message}`) }
 
+// ---- ⑮ 系统按钮避让(shell tab 条右端与三按钮重叠,2026-09-23)----
+// 桌面 Electron 把窗口按钮区信息以 CSS env(titlebar-area-*) 交给应用(WCO),
+// 应用按它让出右上角(shell tabbar.css 的 .tab-bar-caption-spacer);OHOS 引擎不
+// 提供该变量 → 应用算出的避让宽度恒为 0 → 重叠。真值由 entry(ArkTS,
+// windowTitleButtonRectChange)落 title-button-rect.json,这里注入等效 CSS;
+// 周期重读,窗口 resize / 按钮显隐变化后自愈(值不变则不重复注入)。
+const CAPTION_RECT_FILE = '/data/storage/el2/base/files/title-button-rect.json'
+app.on('web-contents-created', (_e, wc) => {
+  let lastCss = ''
+  let lastKey = null
+  const apply = () => {
+    let css = ''
+    try {
+      const r = JSON.parse(fs.readFileSync(CAPTION_RECT_FILE, 'utf8'))
+      // right/width 语义(距窗口右缘)不明确,取较大者兜底
+      const w = Math.max(Number(r.width) || 0, Number(r.right) || 0)
+      if (w > 0) css = `.tab-bar-caption-spacer { width: ${Math.ceil(w)}px !important; }`
+    } catch { /* 文件未就绪:保持应用原样(等价于无按钮区) */ }
+    if (!css || css === lastCss) return
+    lastCss = css
+    const prev = lastKey
+    wc.insertCSS(css)
+      .then((k) => { lastKey = k; if (prev) wc.removeInsertedCSS(prev).catch(() => {}) })
+      .catch(() => { lastCss = '' })
+  }
+  wc.on('dom-ready', apply)
+  setInterval(apply, 2000)
+})
+log('stub: caption-avoidance injector installed')
+
 // ---- ⑫(预案)Tray 兜底 ----
 if (process.env.GO_SHIM_TRAY === '1') {
   try { new Tray(nativeImage.createFromPath(path.join(RESOURCES_DIR, 'app', 'icon.png'))); log('tray: GO_SHIM_TRAY 兜底已建') }
