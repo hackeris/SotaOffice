@@ -58,9 +58,9 @@
 |---|---|---|---|
 | `kernel.ALLOW_WRITABLE_CODE_MEMORY` | ACL system_grant | V8 JIT/wasm,引擎级必需 | (申请续期;曾由 MagicFlow 档覆盖) |
 | `ohos.permission.READ_PASTEBOARD` | **user_grant** | 剪贴板读取 | shim 桩⑭ **授权信号文件制(v2)**:未授权绝不调用原生读侧(调用即弹系统窗,2026-09-22 实测);EntryAbility 查/申请后写 `clip-perm.json`,shim 轮询恢复 |
-| `READ_WRITE_DOCUMENTS_DIRECTORY` | ACL system_grant | Documents 直读直写 | shim 第⑦桩:不可写时落 el2/Documents |
-| `READ_WRITE_DOWNLOAD_DIRECTORY` | ACL system_grant | Download 直写 | 落 el2 |
-| `READ_WRITE_DESKTOP_DIRECTORY` | ACL system_grant | Desktop 直写 | 落 el2 |
+| `READ_WRITE_DOCUMENTS_DIRECTORY` | ACL system_grant | Documents 直读直写 | shim 第⑦桩:三目录逐个探测,不可写 setPath 降级 el2(同名子目录) |
+| `READ_WRITE_DOWNLOAD_DIRECTORY` | ACL system_grant | Download 直写 | 同上 |
+| `READ_WRITE_DESKTOP_DIRECTORY` | ACL system_grant | Desktop 直写 | 同上 |
 
 > 参考:pureoffice(app.fuqidian.pureoffice)名下 READ_PASTEBOARD 已在 AGC 获批(其调试档与生产档 p7b 均含),申请通道已验证可行。
 

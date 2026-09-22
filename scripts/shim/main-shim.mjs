@@ -101,21 +101,30 @@ if (app.isPackaged !== true) {
 }
 log(`stub: app.isPackaged(raw=${PROBES.rawIsPackaged} → ${app.isPackaged})`)
 
-// ---- ⑦ documents 可写探测 + 降级(default-save-dir throw 点)----
-try {
-  const docDir = app.getPath('documents')
-  const probe = path.join(docDir, 'GenOffice')
-  fs.mkdirSync(probe, { recursive: true })
-  const f = path.join(probe, '.go-write-probe')
-  fs.writeFileSync(f, 'ok'); fs.unlinkSync(f)
-  log(`documents: 系统目录可写(${docDir}),不降级`)
-} catch (e) {
+// ---- ⑦ 系统目录(documents/downloads/desktop)可写探测 + 降级 ----
+// 三目录 ACL 到手后系统目录天然可写(探测通过则不干预);未到手时写入抛错会让
+// 保存链断裂,故逐个探测并把不可写的 setPath 降级到 el2(功能不中断)。
+// documents 多探一层 GenOffice 子目录——应用的文件落点在那里。
+for (const [name, sub, fb] of [
+  ['documents', 'GenOffice', 'Documents'],
+  ['downloads', '', 'Download'],
+  ['desktop', '', 'Desktop'],
+]) {
   try {
-    const fallback = path.join(EL2, 'Documents')
-    fs.mkdirSync(fallback, { recursive: true })
-    app.setPath('documents', fallback)
-    log(`documents: 降级 → ${fallback}(${e?.message})`)
-  } catch (e2) { log(`documents 降级失败:${e2?.message}`) }
+    const dir = app.getPath(name)
+    const probeDir = sub ? path.join(dir, sub) : dir
+    fs.mkdirSync(probeDir, { recursive: true })
+    const f = path.join(probeDir, '.go-write-probe')
+    fs.writeFileSync(f, 'ok'); fs.unlinkSync(f)
+    log(`${name}: 系统目录可写(${dir}),不降级`)
+  } catch (e) {
+    try {
+      const fallback = path.join(EL2, fb)
+      fs.mkdirSync(fallback, { recursive: true })
+      app.setPath(name, fallback)
+      log(`${name}: 降级 → ${fallback}(${e?.message})`)
+    } catch (e2) { log(`${name} 降级失败:${e2?.message}`) }
+  }
 }
 
 // ---- ⑧ 单实例三 API(实测 raw returns:true;打桩一致)----
