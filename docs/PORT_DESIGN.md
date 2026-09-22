@@ -308,7 +308,16 @@ MCP/CLI 生态(fork 上 `ELECTRON_RUN_AS_NODE` 已被 hos_vscodium 验证;届时
 
 **方法论沉淀**:renderer 内 DOM 层一切正常时,用 **CDP 合成输入与系统输入(uitest)的差异**切分问题域;`hidumper -s WindowManagerService -a '-a'`(窗口树/坐标)、`uitest dumpLayout`(控件树+bounds)是真机 UI 排障的标准探针。
 
-**另录 fork 已知缺陷(G4 期间发现,不阻塞,待上游)**:①`dialog.showSaveDialog` 的 `defaultPath` **文件名不回填**系统保存面板(目录项亦未生效)——导出/另存可用但用户需手输名字,导出实测 `exportPdf → {ok:true}` 落盘成功;②CDP `Page.printToPDF` 不存在(应用导出走主进程 `webContents.printToPDF`,实测可用——e2e smoke 的 docs-export-pdf 用例需改走应用 IPC)。
+**另录 fork 已知缺陷(G4 期间发现)**——**2026-09-23 逐条复核修正**(此前把分析期预判当成了实测结论,性质重新标注):
+
+| 项 | 复核结论 | 证据等级 |
+|---|---|---|
+| `dialog.showSaveDialog` 的 `defaultPath` 文件名不回填 | **断点不在"fork 没传"**:`file_dialog_ohos.cc:54-78` 传了 default_path 并做 path→URI 转换;断点在 adapter→系统 picker 的参数映射(预填文件名需 `newFileNames`,该层源码 libadapter 不可见) | 现象实测✓ / 根因部分定位 |
+| CDP `Page.printToPDF` 不存在 | **不是缺陷**:CDP `Page.printToPDF` 仅 headless 可用(Chromium 固有设计,有头 Chrome 同样报 "Printing is not available");标准 Electron 亦然。正道是 `webContents.printToPDF`(已用) | 特性边界(查证) |
+| `media(hover:none)` 全能力置空 | **实测确证**(2026-09-23 二次复验,数据一致):UA 声明为 PC,却 `hoverNone:true` + `pointerCoarse/Fine:false` + `anyPointer*:false` + `maxTouchPoints:0` + `ontouchstart:false`——**自相矛盾**。根因:**fork 的 Chromium 未向 Blink 上报设备能力**(设备枚举缺失);**输入事件链路本身正常**(uitest 系统点击可正常操作应用),故为能力上报缺失而非输入失效。影响:CSS 响应式分支选错(hover 才显示的 UI、触屏优化尺寸) | 实测确证✓ / 可回馈上游 |
+| 关 docs tab 走 teardown 不 close | 证据是 GenOffice 源码注释(`tab-manager.ts:597`:"reproduced consistently... looks like an upstream WebContentsView/Chromium issue")——**桌面 Electron 上的复现**,OHOS fork 上本项目未独立验证(直接继承了 teardown 方案,故未触发) | 上游作者复现(待本机验证) |
+| 退出 dlclose 崩溃 | **本项目从未实测**(来源为 MIGRATION_ISSUES 分析期预判)。2026-09-23 复验:force-stop 6 轮启停**零崩溃零残留**——但 force-stop 是 SIGKILL,**不走 dlclose**;优雅退出(app.quit)路径当前工具无法触发(见下条)。**结论仍为"未验证"** | 预判(未验证) |
+| **(新发现)窗口无关闭入口** | 无边框窗口(`titleBarStyle:hidden`)依赖 `setTitleBarOverlay` 提供系统窗口按钮——**fork 不支持该 API**(M1 已打桩);实测 Home 页面 DOM 无任何窗口控制按钮(仅"全部标签"),`window.close()` 对主窗口无效(Electron 规则)。**结果:用户无法通过应用 UI 退出应用**,只能从系统任务栏/多任务关闭。M2 窗口适配项 | 实测确证✓(产品问题) |
 
 ### 11.7 剩余
 
