@@ -42,15 +42,17 @@
 - [x] PORT_DESIGN §11(M1 工程记录)/ 本表 / 清单 §3 修订
 - [x] 一键入口核对:`npm run build:ohos`(sync-engine + build-genoffice --no-build + build-ohos;G4-G5 期间多轮实际使用)
 
-## 4. ACL 权限登记(更新 2026-09-22:包名定案 app.fuqidian.sotaoffice,ACL 五件申请中)
+## 4. ACL 权限登记(更新 2026-09-23:包名与声明已切终态,ACL 五件待 profile)
 
-### 4.1 包名/签名定案
+### 4.1 包名/签名终态(2026-09-23 已切换)
 
-- **正式包名 `app.fuqidian.sotaoffice`**(用户定案 2026-09-22),ACL 五件以此名义在 AGC 申请。
-- 申请落地前的构建产 **unsigned HAP**(装不上真机,属预期);`scripts/.signing.snippet` 暂缺, WineHua 借名材料备份于 `scripts/.signing.snippet.winehua.bak`。
-- 借名实验结论(2026-09-22,勿再试):**ACL 资格 per-app,不能跨应用借用**——本机全部 profile 中 JIT 与 READ_PASTEBOARD 分属不同应用名下,无一套全齐;且安装期校验"声明权限必须在 profile ACL 内"(9568289)、`atm perm grant` 要求权限已被应用声明,两道门槛闭环,本地组合无解。
+- **正式包名 `app.fuqidian.sotaoffice`**(用户定案 2026-09-22)。**代码层已切终态**:`AppScope/app.json5` 包名、
+  `web_engine/src/main/module.json5` 四条 ACL 受限权限声明(READ_PASTEBOARD + 三目录)、`build-ohos.sh` 校验升级为五条必需(缺失即 FATAL)。
+- **当前构建产 unsigned HAP**(装不上真机,属预期)——签名材料与 bundleName 强绑定,MagicFlow 档已移出为
+  `scripts/.signing.snippet.magicflow.bak`;profile 到位后写回 `scripts/.signing.snippet` 即恢复签名产。
+- 借名实验结论(2026-09-22,勿再试):**ACL 资格 per-app,不能跨应用借用**——本机全部 profile 中 JIT 与 READ_PASTEBOARD 分属不同应用名下;且安装期校验"声明受限权限必须在 profile ACL 内"(9568289)、`atm perm grant` 要求权限已被应用声明,两道门槛闭环,本地组合无解。
 
-### 4.2 申请中(AGC,app.fuqidian.sotaoffice 名下;trim 已按终态声明)
+### 4.2 申请中(AGC,app.fuqidian.sotaoffice 名下;声明已按终态入库)
 
 | 权限 | 类型 | 用途 | 等待期行为 |
 |---|---|---|---|
@@ -68,7 +70,7 @@
 
 ### 4.4 profile 到位后的动作(备忘)
 
-1. 新调试 profile(p7b)→ 写入 `scripts/.signing.snippet`(材料路径+口令),`rm build-profile.json5` 重建;
-2. trim 已含全部声明,无需再改;直接 `npm run build:ohos` → `bm install`(报 9568332 时先 `bm uninstall`);
-3. 真机回归:EntryAbility 授权框(READ_PASTEBOARD)→ 写信号文件 → shim 桩⑭ 读到 granted=true 恢复读侧 → 从系统应用复制内容粘贴进 GenOffice 端到端;三目录落点(shim 第⑦桩自动切系统目录,核对 downloads/desktop 是否同样自动);**同时取消 module.json5 中四条受限权限的注释**(调试态借 MagicFlow 档时是注释的);
-4. 若某条 ACL 未获批:从 trim 删除对应声明再构建(声明无 ACL 覆盖 = 9568289 装不上)。
+1. 新调试 profile(p7b)写入 `scripts/.signing.snippet`(材料路径+口令),`rm build-profile.json5` 后 `npm run build:ohos` 重建(产 signed HAP);
+2. 声明与构建校验已按终态就位,无需再改;直接装机(报 9568332 时先 `bm uninstall`);
+3. 真机回归:EntryAbility 授权框(READ_PASTEBOARD)→ 写信号文件 → shim 桩⑭ 读到 granted=true 恢复读侧 → 从系统应用复制粘贴端到端;三目录落点(shim 第⑦桩自动切系统目录,核对 downloads/desktop);
+4. 若某条 ACL 未获批:删除 `web_engine/src/main/module.json5` 对应声明 **并同步 `build-ohos.sh` 必需清单**再构建(声明无 ACL 覆盖 = 9568289 装不上)。

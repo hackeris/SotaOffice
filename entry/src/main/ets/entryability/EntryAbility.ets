@@ -10,12 +10,33 @@ import abilityAccessCtrl, { Permissions } from '@ohos.abilityAccessCtrl';
 import bundleManager from '@ohos.bundle.bundleManager';
 import { BusinessError } from '@ohos.base';
 import fs from '@ohos.file.fs';
+import fileUri from '@ohos.file.fileuri';
 
 import { WebAbility } from 'web_engine';
 
 export default class EntryAbility extends WebAbility {
   onConfigurationUpdate(config: Configuration) {
     super.onConfigurationUpdate(config);
+  }
+
+  // 文件关联(系统"打开方式"拉起):want.uri 是待打开文件。
+  // 引擎 initParameters 会把 want.uri 当 startUri(网页应用场景,可能触发网页导航),
+  // 必须改道:转真实路径塞进 cmdArgs(→ CommandLineAdapter → Chromium argv →应用按
+  // supportedFileIn(process.argv) 打开),同时清空 startUri 防误用。
+  // 多实例(launchType=multiton)下每次打开都是新实例,无需处理 onNewWant 热路径。
+  private applyOpenDocument(want: Want): void {
+    const uri: string = want.uri as string;
+    if (uri === undefined || uri === null || !uri.startsWith('file://')) {
+      return;
+    }
+    try {
+      const path: string = new fileUri.FileUri(uri).path;
+      this.startUri = '';
+      this.cmdArgs.push(path);
+      console.info(`open-document: ${uri} -> ${path}`);
+    } catch (e) {
+      console.warn(`open-document parse: ${JSON.stringify(e)}`);
+    }
   }
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam) {
@@ -27,6 +48,7 @@ export default class EntryAbility extends WebAbility {
     this.minimizable = true;
     this.maximizable = true;
     this.closable = true;
+    this.applyOpenDocument(want);
   }
 
   onDestroy() {

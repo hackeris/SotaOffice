@@ -325,4 +325,30 @@ MCP/CLI 生态(fork 上 `ELECTRON_RUN_AS_NODE` 已被 hos_vscodium 验证;届时
 - **G4** 逐模块操作验收:七级表见 `docs/M1_ACCEPTANCE.md`(0 已过);
 - **G5** e2e smoke 七用例:`scripts/e2e/ohos-smoke.mjs` 就位(ws 依赖已入正式仓);
 - **G6** 毁灭性重建演练(rm web_engine+oh_modules+resfile/resources+build-profile → 三脚本全绿);
-- ACL 权限:ALLOW_WRITABLE_CODE_MEMORY 已有;其余避开并登记(`docs/M1_ACCEPTANCE.md` §4),M2 申请。
+- ACL 权限:声明已按终态入库(见 §11.8);待 sotaoffice profile 到位做真机回归(`docs/M1_ACCEPTANCE.md` §4.4)。
+
+### 11.8 包名/权限切终态(2026-09-23,M2)
+
+按"ACL 五件以 `app.fuqidian.sotaoffice` 名义申请、假设全获批"推进,代码层一次切到终态:
+
+| 项 | 变更 |
+|---|---|
+| 包名 | `AppScope/app.json5`:`app.fuqidian.magicflow`(借名调试) → **`app.fuqidian.sotaoffice`** |
+| 权限声明 | `web_engine/src/main/module.json5`:READ_PASTEBOARD + 三目录由注释恢复为声明(ACL 五件齐) |
+| 构建校验 | `scripts/build-ohos.sh`:四条由"调试态提示"升级为**必需**(缺失即 FATAL),与 JIT 合为五条必需 |
+| 签名 | MagicFlow 材料与 bundleName 强绑定,已移出为 `scripts/.signing.snippet.magicflow.bak`;当前产 **unsigned HAP** |
+
+验证:`bash scripts/build-ohos.sh` 全绿 → `entry-default-unsigned.hap`(326,844,130 B,669 files;较 signed 版少 ~1.7MB 签名块,且 SignHap 跳过 3s → 34ms)。profile 到位后写回 `scripts/.signing.snippet` 即恢复 signed 产(步骤见 `M1_ACCEPTANCE.md` §4.4)。
+
+### 11.9 文件关联(2026-09-23,M2)
+
+系统"打开方式"接入,三段链(声明 → 改道 → 消费):
+
+| 段 | 位置 | 内容 |
+|---|---|---|
+| 声明 | `entry/src/main/module.json5` skills | 6 条 `{scheme:file, type:<UTD>, linkFeature:FileOpen}`:docx/xlsx/pptx(openxmlformats 系)、pdf(`com.adobe.pdf`)、md(`general.markdown`)、html(`general.html`) |
+| 改道 | `entry/EntryAbility.applyOpenDocument` | `want.uri` → `fileUri.FileUri(uri).path` → `cmdArgs`,并**清空 `startUri`**——引擎 initParameters 会把 want.uri 当 startUri(网页应用场景)误用 |
+| 消费 | 引擎 `CommandLineAdapter.appendArgs` → Chromium argv → 应用 `supportedFileIn(process.argv)` → `openDocumentPath` | 应用侧**原生支持** argv 路径入口,零改 GenOffice 源码 |
+
+要点:①`linkFeature:"FileOpen"` 必填、大小写敏感,`scheme` 固定 `file`;②UTD 名取 `@ohos.data.uniformTypeDescriptor` 预置表——docx/xlsx/pptx 用 openxmlformats 系(`com.microsoft.word.doc` 是旧 doc 格式,勿混);③应用侧 `supportedFileIn` 要求**路径真实存在**(existsSync)且扩展名匹配 → 必须转真实路径(非 URI);④多实例(launchType=multiton)下每次打开是新实例,无 onNewWant 热路径。
+**待验(profile 到位后)**:路径可读性(系统对 want.uri 的临时授权 × 三目录 ACL 的配合)与 argv 是否真达 Electron 主进程。

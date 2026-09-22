@@ -90,7 +90,7 @@
 
 ### 4.1 调试签名(POC 阶段)
 
-- 现有 MagicFlow 调试证书可直接用(bundleName `app.fuqidian.magicflow` 与证书匹配);
+- 调试证书与 bundleName 强绑定:**终态包名 `app.fuqidian.sotaoffice` 的 ACL profile 申请中**(到位前构建产 unsigned HAP);借名调试期曾用 MagicFlow 档(详见 `docs/M1_ACCEPTANCE.md` §4);
 - **[官] 未申请到 ACL 证书时,可暂时注释 ACL 权限再签名**(HAP 能装,功能受限)。
 
 ### 4.2 权限三档(官方 module.json5 全集 × GenOffice 裁剪)
@@ -267,7 +267,7 @@ hos_vscodium 清单中以下要素 **GenOffice 不需要**(零 napi/零 CLI 工�
 | napi-dyn 转发层(libelectron RTLD_LOCAL dlsym 桥) | 自编 .node 链接 napi 符号 | **不需要**;若 M2 做 pdfium 原生化,重编 .node 时**必须**走此方案(方法描述符 `napi_default_method`) |
 | `node` 启动器(ELECTRON_RUN_AS_NODE) | 扩展宿主/utilityProcess | GenOffice utilityProcess.fork 支持——**待真机确认是否需要 node 启动器**(fork 拉起 electron --run-as-node 链) |
 | extensions/ohos-terminal、product.json/policies | VS Code 特有 | 不需要 |
-| 蹭系统白名单包名(com.huawei.codearts.agent) | CodeArts 覆盖 | 不适用(用 app.fuqidian.magicflow) |
+| 蹭系统白名单包名(com.huawei.codearts.agent) | CodeArts 覆盖 | 不适用(用 `app.fuqidian.sotaoffice`) |
 
 **待定项**(POC-0/3 真机定):
 - argv.json `disable-chromium-sandbox:true` 是否 GenOffice 也需要(VSCodium 因 Chromium 沙箱初始化失败而禁——fork 的沙箱路径布局靠 CUSTOM_SANDBOX 权限,需实测开了权限后能否不禁);

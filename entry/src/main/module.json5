@@ -57,7 +57,41 @@
               "action.system.home",
               "ohos.want.action.viewData"
             ],
-            "uris": []
+            // 文件关联(系统"打开方式"):scheme 固定 file,type 为 UTD(见
+            // @ohos.data.uniformTypeDescriptor 预置表),linkFeature 大小写敏感。
+            // URI 由 EntryAbility.applyOpenDocument 转路径进 cmdArgs(见该处注释)
+            "uris": [
+              {
+                "scheme": "file",
+                "type": "org.openxmlformats.wordprocessingml.document",
+                "linkFeature": "FileOpen"
+              },
+              {
+                "scheme": "file",
+                "type": "org.openxmlformats.spreadsheetml.sheet",
+                "linkFeature": "FileOpen"
+              },
+              {
+                "scheme": "file",
+                "type": "org.openxmlformats.presentationml.presentation",
+                "linkFeature": "FileOpen"
+              },
+              {
+                "scheme": "file",
+                "type": "com.adobe.pdf",
+                "linkFeature": "FileOpen"
+              },
+              {
+                "scheme": "file",
+                "type": "general.markdown",
+                "linkFeature": "FileOpen"
+              },
+              {
+                "scheme": "file",
+                "type": "general.html",
+                "linkFeature": "FileOpen"
+              }
+            ]
           }
         ]
       },

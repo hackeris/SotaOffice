@@ -1,16 +1,13 @@
 {
   "app": {
-    // [临时调试态 2026-09-22] 借 MagicFlow 档(ACL 仅 JIT,与 M1 同款)真机回归;
-    // 正式包名 app.fuqidian.sotaoffice 待 AGC profile 到位后切回。
-    "bundleName": "app.fuqidian.magicflow",
+    // 正式包名(ACL 五件以此名义在 AGC 申请;其调试 profile 到位前,构建产 unsigned HAP)
+    "bundleName": "app.fuqidian.sotaoffice",
     "vendor": "example",
     "versionCode": 1000000,
     "versionName": "0.1.0",
     "icon": "$media:layered_image",
     "label": "$string:app_name"
-    // [trim 2026-09-20] multiAppMode 移除 —— API 26 真机实测:specified 启动被拒
-    // (hilog [ability_util.h340] Not support multi-instance → StartAbilityError:-1),
-    // 该 multiAppMode 声明未被系统承认(字段结构在 API 26 疑有变更或需 AGC 资质)。
-    // 自检阶段降级 launchType=standard 先点亮;多窗口正确姿势(多实例 API 26 版)点亮后重查。
+    // multiAppMode 移除:API 26 真机 specified 启动被拒(hilog [ability_util.h340]
+    // Not support multi-instance),该声明未被系统承认;多实例走 entry launchType(multiton)
   }
 }

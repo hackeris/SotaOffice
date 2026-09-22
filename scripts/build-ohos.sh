@@ -45,16 +45,15 @@ echo "==> [1/4] web_engine 权限校验(module.json5 已自有化入库,直接�
 "$NODE_BIN" -e '
   const fs = require("fs");
   const t = fs.readFileSync("web_engine/src/main/module.json5", "utf8");
-  // 必须声明的权限(缺 = 功能链断裂)
-  for (const p of ["ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY"]) {
-    if (!t.includes(`"${p}"`)) { console.error(`FATAL: module.json5 缺声明 ${p}`); process.exit(1); }
-  }
-  // 调试态提示(借 MagicFlow 档:ACL 仅 JIT,四条受限权限均不可声明);
-  // sotaoffice profile 到位后取消 module.json5 中对应注释,并升级为必需校验
-  for (const p of ["READ_PASTEBOARD", "READ_WRITE_DOCUMENTS_DIRECTORY",
-    "READ_WRITE_DOWNLOAD_DIRECTORY", "READ_WRITE_DESKTOP_DIRECTORY"]) {
-    if (!new RegExp(`^[ \\t]*"name": "ohos\\.permission\\.${p}"`, "m").test(t)) {
-      console.log(`    提示: ${p} 未声明(调试态)`);
+  // 必需声明(缺 = 功能链断裂):JIT + ACL 五件中余下四条
+  for (const p of ["ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY",
+    "ohos.permission.READ_PASTEBOARD",
+    "ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY",
+    "ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY",
+    "ohos.permission.READ_WRITE_DESKTOP_DIRECTORY"]) {
+    const esc = p.replace(/\./g, "\\.");
+    if (!new RegExp(`^[ \\t]*"name": "${esc}"`, "m").test(t)) {
+      console.error(`FATAL: module.json5 缺声明 ${p}`); process.exit(1);
     }
   }
   // 未获批的 ACL 受限权限不得声明(声明了但签名 profile 未覆盖 → 真机安装报 9568289)
@@ -63,7 +62,7 @@ echo "==> [1/4] web_engine 权限校验(module.json5 已自有化入库,直接�
       console.error(`FATAL: module.json5 含未获批权限 ${p}(profile ACL 未覆盖则装机失败)`); process.exit(1);
     }
   }
-  console.log("    权限校验通过(5 项必需声明在位,未获批权限未出现)");
+  console.log("    权限校验通过(ACL 五件声明在位,未获批权限未出现)");
 '
 
 echo "==> [2/4] ohpm install(web_engine 依赖 inversify/reflect-metadata;hvigor 不会自动装——2026-09-19 踩坑:Cannot find module 'web_engine')"
