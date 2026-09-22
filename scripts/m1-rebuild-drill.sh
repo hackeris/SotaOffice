@@ -36,7 +36,7 @@ bash scripts/sync-engine.sh
 echo "==> [4/6] build-genoffice --no-build(产物组装 + 断言)"
 bash scripts/build-genoffice.sh --no-build
 
-echo "==> [5/6] build-ohos(权限校验 + hvigor 打包 + 签名)"
+echo "==> [5/6] build-ohos(权限校验 + hvigor 打包;有签名素材则签名,sotaoffice profile 未到位 → unsigned)"
 bash scripts/build-ohos.sh
 
 echo "==> [6/6] 最终产物断言"
