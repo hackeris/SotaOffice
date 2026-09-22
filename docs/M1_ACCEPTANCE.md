@@ -55,7 +55,7 @@
 | 权限 | 类型 | 用途 | 等待期行为 |
 |---|---|---|---|
 | `kernel.ALLOW_WRITABLE_CODE_MEMORY` | ACL system_grant | V8 JIT/wasm,引擎级必需 | (申请续期;曾由 MagicFlow 档覆盖) |
-| `ohos.permission.READ_PASTEBOARD` | **user_grant** | 剪贴板读取 | shim 桩⑭ 探测式:未授权读侧静默(有界探测,不死循环);EntryAbility 启动即申请授权框 |
+| `ohos.permission.READ_PASTEBOARD` | **user_grant** | 剪贴板读取 | shim 桩⑭ **授权信号文件制(v2)**:未授权绝不调用原生读侧(调用即弹系统窗,2026-09-22 实测);EntryAbility 查/申请后写 `clip-perm.json`,shim 轮询恢复 |
 | `READ_WRITE_DOCUMENTS_DIRECTORY` | ACL system_grant | Documents 直读直写 | shim 第⑦桩:不可写时落 el2/Documents |
 | `READ_WRITE_DOWNLOAD_DIRECTORY` | ACL system_grant | Download 直写 | 落 el2 |
 | `READ_WRITE_DESKTOP_DIRECTORY` | ACL system_grant | Desktop 直写 | 落 el2 |
@@ -70,5 +70,5 @@
 
 1. 新调试 profile(p7b)→ 写入 `scripts/.signing.snippet`(材料路径+口令),`rm build-profile.json5` 重建;
 2. trim 已含全部声明,无需再改;直接 `npm run build:ohos` → `bm install`(报 9568332 时先 `bm uninstall`);
-3. 真机回归:EntryAbility 授权框(READ_PASTEBOARD)→ shim 桩⑭ 探测通过(读侧恢复)→ 从系统应用复制内容粘贴进 GenOffice 端到端;三目录落点(shim 第⑦桩自动切系统目录,核对 downloads/desktop 是否同样自动);
+3. 真机回归:EntryAbility 授权框(READ_PASTEBOARD)→ 写信号文件 → shim 桩⑭ 读到 granted=true 恢复读侧 → 从系统应用复制内容粘贴进 GenOffice 端到端;三目录落点(shim 第⑦桩自动切系统目录,核对 downloads/desktop 是否同样自动);**同时取消 module.json5 中四条受限权限的注释**(调试态借 MagicFlow 档时是注释的);
 4. 若某条 ACL 未获批:从 trim 删除对应声明再构建(声明无 ACL 覆盖 = 9568289 装不上)。
