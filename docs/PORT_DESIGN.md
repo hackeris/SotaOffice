@@ -351,4 +351,12 @@ MCP/CLI 生态(fork 上 `ELECTRON_RUN_AS_NODE` 已被 hos_vscodium 验证;届时
 | 消费 | 引擎 `CommandLineAdapter.appendArgs` → Chromium argv → 应用 `supportedFileIn(process.argv)` → `openDocumentPath` | 应用侧**原生支持** argv 路径入口,零改 GenOffice 源码 |
 
 要点:①`linkFeature:"FileOpen"` 必填、大小写敏感,`scheme` 固定 `file`;②UTD 名取 `@ohos.data.uniformTypeDescriptor` 预置表——docx/xlsx/pptx 用 openxmlformats 系(`com.microsoft.word.doc` 是旧 doc 格式,勿混);③应用侧 `supportedFileIn` 要求**路径真实存在**(existsSync)且扩展名匹配 → 必须转真实路径(非 URI);④多实例(launchType=multiton)下每次打开是新实例,无 onNewWant 热路径。
-**待验(profile 到位后)**:路径可读性(系统对 want.uri 的临时授权 × 三目录 ACL 的配合)与 argv 是否真达 Electron 主进程。
+**实测结果(2026-09-24,sotaoffice + SotaOffice profile)**:
+- **冷启动 ✓**(主场景):`aa start -U <file uri>` → CDP target `未命名的文档.docx | genoffice-app://docs/...`,
+  全链路走通(want.uri → 真实路径 → cmdArgs → Chromium argv → 应用 `supportedFileIn` → `openDocumentPath`);
+  路径可读性无问题(三目录 ACL + 系统对 want.uri 的授权叠加)。
+- **热启动 ✗(已知缺口)**:应用**已运行**时再打开文件,`aa start` 走新 Ability 实例,引擎
+  `checkSingleInstance` 令**已有 Electron 进程**开新窗口(不启新进程),而新窗口内容取 `startUri`
+  ——该值已被 `applyOpenDocument` 清空(不清空则引擎会把文件 URI 当网页导航)→ **白窗口**。
+  根治需主进程暴露"运行时打开文档"通道(上游 GenOffice 改动或自研 control-server 客户端,M3 计划内);
+  当前记为 M2 遗留。
