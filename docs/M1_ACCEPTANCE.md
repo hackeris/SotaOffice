@@ -74,3 +74,22 @@
 2. 声明与构建校验已按终态就位,无需再改;直接装机(报 9568332 时先 `bm uninstall`);
 3. 真机回归:EntryAbility 授权框(READ_PASTEBOARD)→ 写信号文件 → shim 桩⑭ 读到 granted=true 恢复读侧 → 从系统应用复制粘贴端到端;三目录落点(shim 第⑦桩自动切系统目录,核对 downloads/desktop);
 4. 若某条 ACL 未获批:删除 `web_engine/src/main/module.json5` 对应声明 **并同步 `build-ohos.sh` 必需清单**再构建(声明无 ACL 覆盖 = 9568289 装不上)。
+
+### 4.5 声明配置方式与约束
+
+**位置**:`web_engine/src/main/module.json5`(HAR 模块——权限随 HAR 合并进 entry,entry 自己零声明);
+reason 字符串在三语言 `web_engine/src/main/resources/{base,zh_CN,en_US}/element/string.json`。
+
+| 类别 | 写法 | 例 |
+|---|---|---|
+| 普通系统权限(system_grant) | 仅 `name` | `{ "name": "ohos.permission.INTERNET" }` |
+| 受限 ACL 权限 | `name` + `reason` + `usedScene` | `{ "name": "ohos.permission.READ_PASTEBOARD", "reason": "$string:access_pasteboard", "usedScene": { "abilities": ["EntryAbility"], "when": "always" } }` |
+| 自定义 kernel 权限 | `definePermissions` 里定义 + `requestPermissions` 仅 `name` | `ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY` |
+
+**约束(踩坑)**:
+1. **声明须与签名 profile 的 ACL 一致**:声明了但 profile 未覆盖 → 装机报 **9568289**;profile 有而未声明 →
+   `atm perm grant` 报 "Permission is not requested"。两道门槛闭环,本地无解(见 §4.1)。
+2. **HAR 模块的受限权限必须带 `reason`**,否则 hvigor 报 **00303222**;`kernel.*` 自定义权限不受此限。
+3. **user_grant 权限**(仅 READ_PASTEBOARD)声明后还需**运行时申请**:`EntryAbility.requestClipboardPermission`
+   → `requestPermissionsFromUser`(须在窗口就绪后,onCreate 期申请会静默失败且被记账)。
+4. 构建期校验:`scripts/build-ohos.sh` 第 [1/4] 步——五条必需声明(缺失即 FATAL)+ 未获批权限不得出现。
