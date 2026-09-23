@@ -355,8 +355,9 @@ MCP/CLI 生态(fork 上 `ELECTRON_RUN_AS_NODE` 已被 hos_vscodium 验证;届时
 - **冷启动 ✓**(主场景):`aa start -U <file uri>` → CDP target `未命名的文档.docx | genoffice-app://docs/...`,
   全链路走通(want.uri → 真实路径 → cmdArgs → Chromium argv → 应用 `supportedFileIn` → `openDocumentPath`);
   路径可读性无问题(三目录 ACL + 系统对 want.uri 的授权叠加)。
-- **热启动 ✗(已知缺口)**:应用**已运行**时再打开文件,`aa start` 走新 Ability 实例,引擎
-  `checkSingleInstance` 令**已有 Electron 进程**开新窗口(不启新进程),而新窗口内容取 `startUri`
-  ——该值已被 `applyOpenDocument` 清空(不清空则引擎会把文件 URI 当网页导航)→ **白窗口**。
-  根治需主进程暴露"运行时打开文档"通道(上游 GenOffice 改动或自研 control-server 客户端,M3 计划内);
-  当前记为 M2 遗留。
+- **热启动 ✓(2026-09-24 修复,真机验证)**:原缺口——应用已运行时再打开文件会出**白窗口**
+  (multiton 新建 Ability 实例 → 引擎令已有 Electron 进程开新窗口,内容却取被清空的 `startUri`)。
+  修法三段:①`launchType` multiton → **singleton**(回归应用本来的单实例设计);②`EntryAbility.onNewWant`
+  写 `open-doc.json`(运行时无 cmdArgs 注入通道);③shim **桩⑰** 轮询信号,经**应用自带 control-server**
+  (`control.sock` + `control.json` 里的 token,`open` 命令直连 `openDocumentPath`)在现有窗口打开文档
+  ——**零改上游源码**。真机验证:热启动后单窗口、文档在现有窗口打开、hilog 见 `open-document(hot)`。
