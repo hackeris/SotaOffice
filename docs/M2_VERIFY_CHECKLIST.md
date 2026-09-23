@@ -55,8 +55,11 @@
 hdc file send entry/build/default/outputs/default/entry-default-signed.hap /data/local/tmp/go.hap
 hdc shell "bm install -p /data/local/tmp/go.hap && aa start -a EntryAbility -b app.fuqidian.sotaoffice"
 
-# shim 日志
-hdc shell "hilog -x | grep GO-SHIM"          # -x 退避模式减少刷屏
+# shim 日志(注:hilog 会被 flowcontrol 丢日志,启动期日志常缺;以探针为准)
+hdc shell "hilog -x | grep GO-SHIM"          # -x: 非阻塞 dump 缓冲区后退出
+
+# 探针(shim 桩⑯ 注入 shell 页,CDP 9333 可读):三目录落点/可写性 + 剪贴板授权信号
+node /tmp/probe-info.mjs                     # 打印 window.__GO_INFO__
 
 # 文件关联手测(不依赖文件管理器 UI)
 hdc shell "aa start -a EntryAbility -b app.fuqidian.sotaoffice -U file://docs/storage/Users/currentUser/Desktop/test.docx"

@@ -44,12 +44,12 @@
 
 ## 4. ACL 权限登记(更新 2026-09-23:包名与声明已切终态,ACL 五件待 profile)
 
-### 4.1 包名/签名终态(2026-09-23 已切换)
+### 4.1 包名/签名终态(09-23 代码层切换;09-24 profile 到位)
 
-- **正式包名 `app.fuqidian.sotaoffice`**(用户定案 2026-09-22)。**代码层已切终态**:`AppScope/app.json5` 包名、
-  `web_engine/src/main/module.json5` 四条 ACL 受限权限声明(READ_PASTEBOARD + 三目录)、`build-ohos.sh` 校验升级为五条必需(缺失即 FATAL)。
-- **当前构建产 unsigned HAP**(装不上真机,属预期)——签名材料与 bundleName 强绑定,MagicFlow 档已移出为
-  `scripts/.signing.snippet.magicflow.bak`;profile 到位后写回 `scripts/.signing.snippet` 即恢复签名产。
+- **正式包名 `app.fuqidian.sotaoffice`**。代码层已切终态:`AppScope/app.json5` 包名、
+  `web_engine/src/main/module.json5` 四条 ACL 受限权限声明、`build-ohos.sh` 校验升级为五条必需(缺失即 FATAL)。
+- **签名材料(09-24)**:`scripts/.signing.snippet` 指向 `default_SotaOffice_*`(ExampleProject 调试材料改名而来),
+  实测 bundle-name 匹配、**ACL 五件齐**、真机 UDID 在 device-ids 内 → signed HAP 装机成功。
 - 借名实验结论(2026-09-22,勿再试):**ACL 资格 per-app,不能跨应用借用**——本机全部 profile 中 JIT 与 READ_PASTEBOARD 分属不同应用名下;且安装期校验"声明受限权限必须在 profile ACL 内"(9568289)、`atm perm grant` 要求权限已被应用声明,两道门槛闭环,本地组合无解。
 
 ### 4.2 申请中(AGC,app.fuqidian.sotaoffice 名下;声明已按终态入库)
@@ -58,9 +58,9 @@
 |---|---|---|---|
 | `kernel.ALLOW_WRITABLE_CODE_MEMORY` | ACL system_grant | V8 JIT/wasm,引擎级必需 | (申请续期;曾由 MagicFlow 档覆盖) |
 | `ohos.permission.READ_PASTEBOARD` | **user_grant** | 剪贴板读取 | shim 桩⑭ **授权信号文件制(v2)**:未授权绝不调用原生读侧(调用即弹系统窗,2026-09-22 实测);EntryAbility 查/申请后写 `clip-perm.json`,shim 轮询恢复 |
-| `READ_WRITE_DOCUMENTS_DIRECTORY` | ACL system_grant | Documents 直读直写 | shim 第⑦桩:三目录逐个探测,不可写 setPath 降级 el2(同名子目录) |
-| `READ_WRITE_DOWNLOAD_DIRECTORY` | ACL system_grant | Download 直写 | 同上 |
-| `READ_WRITE_DESKTOP_DIRECTORY` | ACL system_grant | Desktop 直写 | 同上 |
+| `READ_WRITE_DOCUMENTS_DIRECTORY` | ACL **user_grant** | Documents 直读直写 | 须运行时弹窗授予(见 §4.5 约束 3);未授予时 shim 第⑦桩降级 el2 |
+| `READ_WRITE_DOWNLOAD_DIRECTORY` | ACL **user_grant** | Download 直写 | 同上 |
+| `READ_WRITE_DESKTOP_DIRECTORY` | ACL **user_grant** | Desktop 直写 | 同上 |
 
 > 参考:pureoffice(app.fuqidian.pureoffice)名下 READ_PASTEBOARD 已在 AGC 获批(其调试档与生产档 p7b 均含),申请通道已验证可行。
 
@@ -90,6 +90,9 @@ reason 字符串在三语言 `web_engine/src/main/resources/{base,zh_CN,en_US}/e
 1. **声明须与签名 profile 的 ACL 一致**:声明了但 profile 未覆盖 → 装机报 **9568289**;profile 有而未声明 →
    `atm perm grant` 报 "Permission is not requested"。两道门槛闭环,本地无解(见 §4.1)。
 2. **HAR 模块的受限权限必须带 `reason`**,否则 hvigor 报 **00303222**;`kernel.*` 自定义权限不受此限。
-3. **user_grant 权限**(仅 READ_PASTEBOARD)声明后还需**运行时申请**:`EntryAbility.requestClipboardPermission`
-   → `requestPermissionsFromUser`(须在窗口就绪后,onCreate 期申请会静默失败且被记账)。
+3. **user_grant 权限**(READ_PASTEBOARD + **三目录**,共 4 条)声明后还须**运行时弹窗申请**:
+   `EntryAbility.requestClipboardPermission` / `requestStoragePermissions` → `requestPermissionsFromUser`
+   (须在窗口就绪后调用,onCreate 期申请会静默失败且被记账)。
+   **实测(2026-09-24)**:三目录只声明+ACL、未运行时申请时,写 `/storage/Users/currentUser/*` 全 **EPERM**
+   (ACL 给的是"申请资格",不是"已授予")。
 4. 构建期校验:`scripts/build-ohos.sh` 第 [1/4] 步——五条必需声明(缺失即 FATAL)+ 未获批权限不得出现。

@@ -26,8 +26,14 @@ import path from 'node:path'
 const PROBES = (globalThis.__GO_PROBES__ = {})
 const LOG = '/data/storage/el2/base/files/shim-log.txt'
 const EL2 = '/data/storage/el2/base/files'
+// 日志三路:①沙箱文件(hdc 读不到) ②公共 Documents(仅三目录 ACL 到位才写成功——
+// 既当日志通道,也是**ACL 生效的实证**) ③console→hilog(会被 flowcontrol 丢)
+const LOG_PUBLIC = '/storage/Users/currentUser/Documents/GenOffice/shim-log.txt'
 const log = (m) => {
-  try { fs.mkdirSync(path.dirname(LOG), { recursive: true }); fs.appendFileSync(LOG, `${new Date().toISOString()} ${m}\n`) } catch {}
+  const line = `${new Date().toISOString()} ${m}\n`
+  for (const p of [LOG, LOG_PUBLIC]) {
+    try { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.appendFileSync(p, line) } catch {}
+  }
   try { console.log(`[GO-SHIM] ${m}`) } catch {}
 }
 
@@ -105,6 +111,8 @@ log(`stub: app.isPackaged(raw=${PROBES.rawIsPackaged} → ${app.isPackaged})`)
 // 三目录 ACL 到手后系统目录天然可写(探测通过则不干预);未到手时写入抛错会让
 // 保存链断裂,故逐个探测并把不可写的 setPath 降级到 el2(功能不中断)。
 // documents 多探一层 GenOffice 子目录——应用的文件落点在那里。
+PROBES.paths = {}
+PROBES.pathWritable = {}
 for (const [name, sub, fb] of [
   ['documents', 'GenOffice', 'Documents'],
   ['downloads', '', 'Download'],
@@ -116,12 +124,16 @@ for (const [name, sub, fb] of [
     fs.mkdirSync(probeDir, { recursive: true })
     const f = path.join(probeDir, '.go-write-probe')
     fs.writeFileSync(f, 'ok'); fs.unlinkSync(f)
+    PROBES.paths[name] = dir
+    PROBES.pathWritable[name] = 'system'
     log(`${name}: 系统目录可写(${dir}),不降级`)
   } catch (e) {
     try {
       const fallback = path.join(EL2, fb)
       fs.mkdirSync(fallback, { recursive: true })
       app.setPath(name, fallback)
+      PROBES.paths[name] = fallback
+      PROBES.pathWritable[name] = `fallback(${e?.code ?? ''}${e?.message ?? e})`
       log(`${name}: 降级 → ${fallback}(${e?.message})`)
     } catch (e2) { log(`${name} 降级失败:${e2?.message}`) }
   }
@@ -242,15 +254,17 @@ try {
       try { verdict = JSON.parse(fs.readFileSync(GRANT_FILE, 'utf8')) } catch {}
       if (verdict?.granted === true) {
         for (const [m, fn] of Object.entries(orig)) { try { clipboard[m] = fn } catch {} }
+        PROBES.clipGrant = 'granted'
         log('stub: clipboard 读侧已恢复(授权信号确认)')
         return
       }
       if (verdict?.granted === false) {
+        PROBES.clipGrant = 'denied'
         log('stub: clipboard 授权信号=未授予,读侧永久静默')
         return
       }
       if (tries < 20) setTimeout(checkGrant, 3000)
-      else log('stub: clipboard 授权信号超时未到,读侧保持静默')
+      else { PROBES.clipGrant = 'timeout'; log('stub: clipboard 授权信号超时未到,读侧保持静默') }
     }
     app.whenReady().then(() => setTimeout(checkGrant, 3000))
   }
@@ -285,6 +299,20 @@ app.on('web-contents-created', (_e, wc) => {
   setInterval(apply, 2000)
 })
 log('stub: caption-avoidance injector installed')
+
+// ---- ⑯ 探针上报(2026-09-24)----
+// 沙箱文件 hdc 读不到、hilog 会 flowcontrol 丢日志,唯一可靠通道是 CDP:
+// 周期把 PROBES(三目录落点/可写性、剪贴板授权信号、平台等)注入 shell 页,
+// 排障时 `window.__GO_INFO__` 一读即得。
+app.on('browser-window-created', (_e, win) => {
+  const wc = win.webContents
+  const push = () => {
+    try { wc.executeJavaScript(`window.__GO_INFO__ = ${JSON.stringify(PROBES)}`, true).catch(() => {}) } catch {}
+  }
+  wc.on('dom-ready', push)
+  setInterval(push, 2000)
+})
+log('stub: probes injector installed')
 
 // ---- ⑫(预案)Tray 兜底 ----
 if (process.env.GO_SHIM_TRAY === '1') {

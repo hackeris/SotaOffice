@@ -177,9 +177,29 @@ export default class EntryAbility extends WebAbility {
     }
   }
 
+  // 三目录(READ_WRITE_{DOCUMENTS,DOWNLOAD,DESKTOP}_DIRECTORY)同为 **user_grant**:
+  // 声明 + profile ACL 只给"申请资格",须运行时弹窗授予——否则写 /storage/Users/currentUser/*
+  // 报 EPERM(2026-09-24 实测:未申请时三目录全 EPERM,shim 第⑦桩降级 el2)。
+  private requestStoragePermissions(): void {
+    const perms: Array<Permissions> = [
+      'ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY',
+      'ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY',
+      'ohos.permission.READ_WRITE_DESKTOP_DIRECTORY',
+    ];
+    try {
+      abilityAccessCtrl.createAtManager()
+        .requestPermissionsFromUser(this.context, perms)
+        .then((res) => { console.info(`storage perm: ${JSON.stringify(res.authResults)}`) })
+        .catch((e: BusinessError) => { console.warn(`storage perm: ${JSON.stringify(e)}`) });
+    } catch (e) {
+      console.warn(`storage perm precheck: ${JSON.stringify(e)}`);
+    }
+  }
+
   onWindowStageCreate(windowStage: window.WindowStage) {
     super.onWindowStageCreate(windowStage);
     this.requestClipboardPermission();
+    this.requestStoragePermissions();
     this.enableSystemDecor(windowStage);
     try {
       this.updateTitleButtonRect(windowStage.getMainWindowSync());
