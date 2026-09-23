@@ -24,18 +24,47 @@ export default class EntryAbility extends WebAbility {
   // 必须改道:转真实路径塞进 cmdArgs(→ CommandLineAdapter → Chromium argv →应用按
   // supportedFileIn(process.argv) 打开),同时清空 startUri 防误用。
   // 多实例(launchType=multiton)下每次打开都是新实例,无需处理 onNewWant 热路径。
-  private applyOpenDocument(want: Want): void {
+  private resolveDocumentPath(want: Want): string {
     const uri: string = want.uri as string;
     if (uri === undefined || uri === null || !uri.startsWith('file://')) {
+      return '';
+    }
+    try {
+      return new fileUri.FileUri(uri).path;
+    } catch (e) {
+      console.warn(`open-document parse: ${JSON.stringify(e)}`);
+      return '';
+    }
+  }
+
+  private applyOpenDocument(want: Want): void {
+    const path: string = this.resolveDocumentPath(want);
+    if (path === '') {
+      return;
+    }
+    this.startUri = '';
+    this.cmdArgs.push(path);
+    console.info(`open-document: ${path}`);
+  }
+
+  // 文件关联热启动(应用已在运行时打开文件):系统复用本实例并回调 onNewWant。
+  // 引擎只在启动期消费 cmdArgs,运行时无注入通道 → 写信号文件,由 shim(桩⑰)
+  // 经应用自带的 control-server 发 open 命令,在现有窗口打开。
+  private static readonly OPEN_DOC_FILE: string = '/data/storage/el2/base/files/open-doc.json';
+
+  onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
+    const path: string = this.resolveDocumentPath(want);
+    if (path === '') {
       return;
     }
     try {
-      const path: string = new fileUri.FileUri(uri).path;
-      this.startUri = '';
-      this.cmdArgs.push(path);
-      console.info(`open-document: ${uri} -> ${path}`);
+      const f = fs.openSync(EntryAbility.OPEN_DOC_FILE,
+        fs.OpenMode.CREATE | fs.OpenMode.READ_WRITE | fs.OpenMode.TRUNC);
+      fs.writeSync(f.fd, JSON.stringify({ path: path, seq: Date.now() }));
+      fs.closeSync(f);
+      console.info(`open-document(hot): ${path}`);
     } catch (e) {
-      console.warn(`open-document parse: ${JSON.stringify(e)}`);
+      console.warn(`open-doc signal: ${JSON.stringify(e)}`);
     }
   }
 

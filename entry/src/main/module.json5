@@ -41,10 +41,11 @@
         "label": "$string:EntryAbility_label",
         "startWindowIcon": "$media:app_icon",
         "startWindowBackground": "$color:start_window_background",
-        // [2026-09-20 修正] 多实例姿势参考 wineohos 实证:launchType=multiton(标准 ability 多实例),
-        // 不用 AppScope multiAppMode(那是"应用多开"资质,API 26 普通应用无 → specified+multiAppMode
-        // 组合被拒,hilog: Not support multi-instance)。
-        "launchType": "multiton",
+        // [2026-09-24] multiton → singleton:multiton 下热启动(应用已开)会新建 Ability
+        // 实例,引擎令已有 Electron 进程开新窗口、内容却取 startUri(禁用文件 URI 误导航
+        // 后为空)→ 白窗口;应用本身按单实例设计(requestSingleInstanceLock + second-instance),
+        // 热启动改走 onNewWant → 信号文件 → shim → control-server 的 open 命令(shim 桩⑰)
+        "launchType": "singleton",
         "removeMissionAfterTerminate": true,
         "exported": true,
         "skills": [

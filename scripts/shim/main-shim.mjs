@@ -314,6 +314,43 @@ app.on('browser-window-created', (_e, win) => {
 })
 log('stub: probes injector installed')
 
+// ---- ⑰ 运行时打开文档(热启动,2026-09-24)----
+// 应用已在运行时打开文件:系统复用 Ability 实例(走 onNewWant),而引擎只在启动期
+// 消费 cmdArgs → EntryAbility 把路径写 open-doc.json,这里轮询并经**应用自带的
+// control-server**(control.sock,JSON lines + token)发 open 命令,在现有窗口打开。
+// 凭据文件 <userData>/control.json 由应用启动 control-server 时写出。
+const OPEN_DOC_FILE = '/data/storage/el2/base/files/open-doc.json'
+try {
+  const net = await import('node:net')
+  let lastSeq = 0
+  const openViaControl = (docPath) => {
+    const info = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'control.json'), 'utf8'))
+    const sock = net.connect(info.endpoint)
+    let buf = ''
+    sock.setEncoding('utf8')
+    sock.setTimeout(15000, () => sock.destroy())
+    sock.on('error', (e) => log(`open-doc: control error ${e?.message}`))
+    sock.on('connect', () => sock.write(
+      JSON.stringify({ token: info.token, request: { cmd: 'open', path: docPath } }) + '\n'))
+    sock.on('data', (c) => {
+      buf += c
+      const nl = buf.indexOf('\n')
+      if (nl < 0) return
+      log(`open-doc: reply ${buf.slice(0, nl)}`)
+      sock.destroy()
+    })
+  }
+  setInterval(() => {
+    let sig = null
+    try { sig = JSON.parse(fs.readFileSync(OPEN_DOC_FILE, 'utf8')) } catch { return }
+    if (!sig?.path || !sig.seq || sig.seq === lastSeq) return
+    lastSeq = sig.seq
+    log(`open-doc: signal -> ${sig.path}`)
+    try { openViaControl(sig.path) } catch (e) { log(`open-doc: ${e?.message}`) }
+  }, 1500)
+  log('stub: runtime-open-document installed')
+} catch (e) { log(`open-doc 桩安装失败:${e?.message}`) }
+
 // ---- ⑫(预案)Tray 兜底 ----
 if (process.env.GO_SHIM_TRAY === '1') {
   try { new Tray(nativeImage.createFromPath(path.join(RESOURCES_DIR, 'app', 'icon.png'))); log('tray: GO_SHIM_TRAY 兜底已建') }
