@@ -11,7 +11,7 @@
 
 | # | 问题 | 选项 | 影响面 |
 |---|---|---|---|
-| **D1** | **AI 后端走哪条路** | ①**纯 BYOK**(用户自填 key,走已有 `custom` provider:OpenAI 兼容 baseUrl+model)②自建网关 ③继续用 genspark(与独立品牌矛盾) | 决定第 1、2 章范围与"是否保留登录" |
+| **D1** | **AI 后端走哪条路** | ✅ **已定:纯 BYOK**(2026-09-24 用户决定:无自有网关)。AI 能力全部走用户自备 key;`custom` provider 保留,供有网关的用户自填 OpenAI 兼容端点 | 决定第 1、2 章范围与"是否保留登录" |
 | **D2** | **是否保留账号体系** | 若 D1=① 或 ②,无自有账号 → **整体移除**(登录 UI/IPC/凭据/credits/云项目) | 第 1 章 |
 | **D3** | **搜索/生图/媒体解析怎么办** | ①保留免费兜底(DuckDuckGo 无 key 可用)+ BYOK ②自建 ③移除 | 第 2 章尾部 |
 
@@ -25,25 +25,33 @@
 - `custom` provider 已是**完整的 OpenAI 兼容通道**——`G/packages/ai-provider/src/registry.ts:266-277`:要求 `config.baseUrl`,协议 `openai-compatible`,支持 vision,**写新代码为零**
 - provider 目录已有 15+ 家 BYOK 厂商;genspark 的特殊点是 `auth: 'gsk-login'`(不要 key,靠登录态)与其模型清单是**代理服务端的模型池**(`providers.ts:44-62` 七个名字)
 
-| 路线 | 代码改动 | 用户侧体验 | 成本 |
-|---|---|---|---|
-| **A 纯 BYOK** | 下面 1–6 全做 | 自行填 baseUrl + key + 模型名 | **0** |
-| **B 预置自有网关** | A + 在 `defaultAiSettings()` 预置网关 `baseUrl`/`model` | 开箱即用 | 网关服务器 + 模型 API 费 |
-| **C 混合(推荐)** | B + 保留 BYOK 供高级用户覆盖 | 开箱即用 + 可覆盖 | 同 B |
+**方案(唯一):纯 BYOK,不预置任何后端。** 这带来两个连带结论:
+- AI 面板定位 = **"配置后可用"**:未配置时给**配置引导**(打开设置选厂商/填 key),而不是登录引导
+- 账号体系失去存在意义(D2 顺势定为**移除**)→ 第 1 章全量执行
 
-**统一要做的代码改动**:
-1. `providers.ts:304-323` `defaultAiSettings()`:`provider: 'genspark'` → `'custom'`(B/C 再预置 `baseUrl`/`model`)
+**默认 provider 建议**(实施时定,影响首启体验):
+
+| 候选 | 理由 | 注意 |
+|---|---|---|
+| `deepseek` | 国内可直连、成本低、OpenAI 兼容 | 确认所选模型支持 vision(文档截图分析) |
+| `dashscope`(通义) | 国内直连、多模态齐 | — |
+| `openai` | 生态最通用 | 国内不可直连 |
+| 首启引导选择 | 最中立 | 需新增引导 UI(成本 +) |
+
+> 建议 `deepseek` 为默认(国内直连),设置页保留全部 BYOK 厂商 + `custom`(供自带网关/自建端点的用户覆盖)。
+
+**要做的代码改动**:
+1. `providers.ts:304-323` `defaultAiSettings()`:`provider: 'genspark'` → 上述默认厂商 id
 2. `providers.ts:338-356` `activeProvider()`:**删两处 `return 'genspark'` 兜底** → 无有效配置时返回空,UI 提示"未配置模型服务"(这是"静默打向上游"的根)
 3. `providers.ts:42-62` 删 genspark meta(含 7 个代理模型名);`registry.ts:140-155` 删 genspark 适配器
 4. `providers.ts:9-26` 删 `GENSPARK_LLM_BASE_URLS`、`GENSPARK_AGENT_TYPE`、`gensparkAttributionHeaders`
 5. `providers.ts:378-383` 删 `RETIRED_MODELS.genspark` + `AiProviderId` 类型里的 `'genspark'`
-6. 各编辑器 AI 面板的 `gsk-status`/`gsk-login` 门禁 → 改"未配置"提示(见 §1.2 / §2.8)
+6. 各编辑器 AI 面板的 `gsk-status`/`gsk-login` 门禁 → 改"未配置 → 去设置"提示(见 §1.2 / §2.8)
 
-**网关侧硬要求(B/C 路线)**:
-- **OpenAI 兼容** `/v1/chat/completions`(custom 走 `openai-compatible` 协议)
-- 必须支持:**流式 SSE**、**工具调用 tool call**(AI 面板依赖)、**图片输入 vision**(文档截图/图片分析)
-- 选型:LiteLLM / one-api / new-api 自建聚合,或直接指某家厂商的兼容端点(DeepSeek/通义/豆包等)
-- ⚠ 原实现给 claude 特意走 anthropic 协议**保图片保真**(`registry.ts:146-155`);换 openai 格式后保真度略降
+**BYOK 的用户侧约束**(写进帮助/首次引导即可,代码层已由 `capabilities.vision` 标注):
+- 所选**模型**需支持 **vision**(文档截图/图片分析)与 **tool call**(AI 面板动作),否则相关功能不可用
+- 流式由 `openai-compatible` / `anthropic` 协议实现,**任何 OpenAI 兼容端点都满足**
+- ⚠ 原实现给 claude 特意走 anthropic 协议**保图片保真**(`registry.ts:146-155`);若用户用 OpenAI 兼容端点跑 claude 系模型,保真度略降——可在帮助里提示"anthropic 原生 key 效果更好"
 
 ## 0.2 D3 落地方案(搜索 / 生图 / 媒体解析)
 
@@ -52,10 +60,12 @@
 - 改动:①删 `:136-151` 的 gsk 分支 ②`search-settings.ts:8-21` 默认 provider 由 `genspark` 改 `serper`(无 key 自动落 DuckDuckGo)
 - 结果:**零后端可用**;有 Serper/Tavily key 的用户自动优先,图片搜索同链(`:176-235`)
 
-**生图 / 媒体解析——取决于 D1**:
+**生图 / 媒体解析——同为 BYOK**:
 - 现状:`media.ts:20-34` 的 `AI_MEDIA_PROVIDERS` 首项为 genspark;`defaultAiMediaSettings()`(`:175-191`)的 image/analysis/videoAnalysis **三个默认值全是 genspark**
 - 现成 BYOK 通路已就绪:openai / gemini / ark / zhipu / xai / dashscope / minimax(各自带 imageProtocol / analysisProtocol / models)
-- 改动:删 genspark 项;默认值按 D1——①走网关 `custom`(需网关支持 images / vision)②或默认 `openai`/`dashscope` 并提示用户填 key
+- 改动:删 genspark 项;三个默认值改为 **与 D1 默认厂商一致的"全模态"厂商**
+- **体验要点**:默认厂商最好**一个 key 通吃**(对话 + vision + 生图),避免用户配三四家——国内可选 **`dashscope`**(通义:Qwen-VL 视觉 + 万相生图)或 **`ark`**(豆包:视觉 + 即梦生图);海外用 `openai`(GPT + GPT Image)
+- 未配 key 时:生图/解析入口给**配置引导**,不得报错或静默失败
 
 **工作量**:搜索 0.5 人日;生图/媒体 1–2;D1 主体 2–4(含回退逻辑重写与各面板提示)。
 
