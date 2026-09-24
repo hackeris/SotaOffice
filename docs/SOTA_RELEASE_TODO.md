@@ -11,9 +11,9 @@
 
 | # | 问题 | 选项 | 影响面 |
 |---|---|---|---|
-| **D1** | **AI 后端走哪条路** | ✅ **已定:纯 BYOK**(2026-09-24 用户决定:无自有网关)。AI 能力全部走用户自备 key;`custom` provider 保留,供有网关的用户自填 OpenAI 兼容端点 | 决定第 1、2 章范围与"是否保留登录" |
+| **D1** | **AI 后端走哪条路** | ✅ **已定:纯 BYOK**(2026-09-24 用户决定:无自有网关)。AI 能力全部走用户自备 key;**默认厂商 `glm`**(2026-09-24);`custom` provider 保留,供有网关的用户自填 OpenAI 兼容端点 | 决定第 1、2 章范围与"是否保留登录" |
 | **D2** | **是否保留账号体系** | ✅ **已定(2026-09-24):整体移除**——D1 为纯 BYOK 且无自有网关,没有账号可挂(登录 UI / IPC / 凭据 / credits / 云项目全清) | 第 1 章 |
-| **D3** | **搜索/生图/媒体解析怎么办** | ✅ **已定(2026-09-24)**:搜索 = 删 gsk + **补国内 provider** + **加 custom 端点**,墙外服务(Serper / Tavily / DuckDuckGo)保留;生图 / 媒体解析 = 纯 BYOK(与 D1 同一厂商) | 第 2 章尾部 |
+| **D3** | **搜索/生图/媒体解析怎么办** | ✅ **已定(2026-09-24)**:搜索 = 删 gsk + **补国内 provider(默认 `bocha`)** + **加 custom 端点**,墙外服务(Serper / Tavily / DuckDuckGo)保留;生图 / 媒体解析 = 纯 BYOK(默认同 D1 = `glm`) | 第 2 章尾部 |
 
 **现状关键事实**(便于判断):未登录**不阻塞**本地编辑/转换/OCR/MCP/CLI——受影响的只有云端 AI 能力。
 
@@ -29,7 +29,7 @@
 - AI 面板定位 = **"配置后可用"**:未配置时给**配置引导**(打开设置选厂商/填 key),而不是登录引导
 - 账号体系失去存在意义(D2 顺势定为**移除**)→ 第 1 章全量执行
 
-**默认 provider 建议**(实施时定,影响首启体验):
+**默认 provider:✅ 已定 `glm`(智谱)**(2026-09-24 用户拍板)。
 
 **选型硬约束**:默认厂商必须**同时存在于两套目录**(chat 的 `AI_PROVIDERS` × media 的 `AI_MEDIA_PROVIDERS`),
 否则会出现"对话能用、生图不通"。两边**都有的 id**:`openai` `gemini` `doubao` `glm` `qwen` `xai` `minimax` `custom`;
@@ -39,16 +39,16 @@
 
 | 候选 | 两侧模型 | 适合 |
 |---|---|---|
-| **`qwen`**(通义) | 生图 `qwen-image-plus/image`;解析 `qwen3-vl-plus/flash` | **国内首选**——一个 key 通吃 |
-| **`doubao`**(豆包) | 生图 `doubao-seedream-5-0/4-5`;解析 `doubao-seed-2-1-pro/turbo` | 国内备选 |
-| **`glm`**(智谱) | 生图 `cogview-4/3-flash`;解析 `glm-4.6v/4.6v-flash` | 国内备选 |
+| ✅ **`glm`**(智谱) | 生图 `cogview-4/3-flash`;解析 `glm-4.6v/4.6v-flash` | **已选默认**(2026-09-24) |
+| `qwen`(通义) | 生图 `qwen-image-plus/image`;解析 `qwen3-vl-plus/flash` | 国内备选 |
+| `doubao`(豆包) | 生图 `doubao-seedream-5-0/4-5`;解析 `doubao-seed-2-1-pro/turbo` | 国内备选 |
 | `openai` / `gemini` | GPT Image / Gemini Image + 各自视觉模型 | 海外场景 |
 | `custom` | **两套目录均有**(模型由用户填) | 自带网关/自建端点用户 |
 
-> 建议默认 `qwen`(国内直连),设置页保留全部 BYOK 厂商 + `custom`(供自带网关/自建端点的用户覆盖,两侧都能配)。
+> 已选 `glm`:设置页保留全部 BYOK 厂商 + `custom`(供自带网关/自建端点的用户覆盖,两侧都能配),用户可随时改选。
 
 **要做的代码改动**:
-1. `providers.ts:304-323` `defaultAiSettings()`:`provider: 'genspark'` → 上述默认厂商 id
+1. `providers.ts:304-323` `defaultAiSettings()`:`provider: 'genspark'` → `'glm'`;media 侧 `media.ts` 三个默认值(image/analysis/videoAnalysis)**同步改 `'glm'`**
 2. `providers.ts:338-356` `activeProvider()`:**删两处 `return 'genspark'` 兜底** → 无有效配置时返回空,UI 提示"未配置模型服务"(这是"静默打向上游"的根)
 3. `providers.ts:42-62` 删 genspark meta(含 7 个代理模型名);`registry.ts:140-155` 删 genspark 适配器
 4. `providers.ts:9-26` 删 `GENSPARK_LLM_BASE_URLS`、`GENSPARK_AGENT_TYPE`、`gensparkAttributionHeaders`
@@ -94,9 +94,11 @@
 - **SearXNG JSON**:`{results:[{title, url, content}]}`(自建最常见)
 - **极简契约**:`{results:[{title, url, snippet}]}`
 
-**待定(实施前定)**:
-1. **默认 provider**:建议 `bocha`(国内直连)。注意此项只决定设置页下拉初值——**无 key 时任何 provider 都产生不了可用后端**,真正要紧的是"未配置时给配置引导,而非静默失败"(同 §0.1)
-2. `custom` 的图片搜索:`AiSearchProviderMeta.imageSearch` 是静态布尔,自定义端点无法预知 → 建议标 `false`(图片搜索仍走 DuckDuckGo 兜底)
+**默认值(✅ 已定 2026-09-24)**:
+1. **默认 provider = `bocha`**(博查,国内直连)。注:此项只决定设置页下拉初值——**无 key 时任何 provider 都产生不了可用后端**,真正要紧的是"未配置时给配置引导,而非静默失败"(同 §0.1)
+2. **`custom` 的图片搜索 = `false`**(`AiSearchProviderMeta.imageSearch` 是静态布尔,自定义端点无法预知;图片搜索仍走 DuckDuckGo 兜底)
+
+> **备选记录**(非当前方案):搜索后端若改用**智谱 Web Search API**,可与 §0.1 已定的 AI 厂商 `glm` **复用同一个 key**(一个 key 覆盖对话/生图/解析/搜索)。当前选择是 `glm` + `bocha`(用户需注册两家),此备选留待后续权衡。
 
 **生图 / 媒体解析——同为 BYOK**:
 - 现状:`media.ts` 的 `AI_MEDIA_PROVIDERS` 首项为 genspark;`defaultAiMediaSettings()` 的 image/analysis/videoAnalysis **三个默认值全是 genspark**,与 chat 侧一致
