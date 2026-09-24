@@ -260,10 +260,39 @@
 **已知问题(基线即有,非本次引入)**:`packages/html2docx/src/convert.ts:317` TS2769。
 stash 全部改动后在基线 `339470d` 上可复现**同一错误**;不阻塞构建(`build:all` 不含 typecheck)。
 
-### 阶段二(待做)
+### 阶段二:账号链移除(已完成主体)
 
-- **账号链移除(§1)**:`gsk.ts` / `genoffice-auth.ts` 文件删除、apps 的 gsk 注入死分支、
-  `ai:gsk-status` 通道、cloud-projects、云幻灯片;按 §1 的**自底向上顺序**执行
-- **UI 面板引导**:未配置时给"去设置配置模型服务"提示(替代原登录引导)
-- **i18n 文案(§3)**:793 处 genspark 提及
-- **shim 造测试文件桩**:解决真机基线 B4 阻塞(公共目录 hdc 不可写,须由应用侧生成)
+**删除**:
+- `packages/ai-search/src/gsk.ts`(619 行:gsk 搜索/生图/幻灯片/云项目/登录态全套)
+- `packages/ai-search/src/genoffice-auth.ts`(421 行:设备码登录全流程)
+- `apps/shell/src/main/cloud-projects.ts`,以及 gsk / genoffice-auth / cloud-projects 三个测试文件
+
+**清除**:
+- **shell**:账号 IPC(`accountStatus`/`Login`/`LoginOpenUrl`/`Logout`)、credits 外跳与余额、
+  云项目 IPC 与缓存;`home-api.ts` 的对应类型与 channel;preload 实现
+- **slides / sheets / docs**:各自的 `ai:gsk-status` / `ai:gsk-login` handler
+- **slides**:云单页幻灯片(`slides:cloud-page-generate` 全套,即 gsk `slide_generate`);
+  **保留**本地 BYOK 生成路径(`slides:local-page-generate`)
+- **5 个 app 的 AI 面板**:`gskLoggedInRef` 门禁(实测只写不读)、`loginRequired` 标记与登录按钮
+
+**改造**:
+- `Home.tsx`:左下角**账号入口 → 设置入口**(原设计里设置弹窗只从账号入口打开,故不能直删;
+  改为纯设置按钮,保留技能更新提示)
+- `SettingsModal.tsx`:删账号页与 8 个账号 props,默认落 **AI 模型页**
+- `media-tools.ts`:媒体工具改**纯 BYOK**,未配置时返回 `MEDIA_NOT_CONFIGURED_ERROR`
+  (`MediaToolOptions.notLoggedInError` → `notConfiguredError`);`GSK_RMBG_MODEL` 与
+  透明背景的二次抠图链随 gsk 一并移除
+- 代理函数改名 `setGskProxyUrl` / `gskProxyUrl` → `setAiProxyUrl` / `aiProxyUrl`
+  (代理与 gsk 无关;消费方 5 处)
+
+**验证**:全量 typecheck 仅剩既有 `html2docx:317`;`npm run build:all` **通过**;
+ai-search 20 测试通过(media-tools 测试重写为 BYOK 语义)。
+
+### 阶段三(待做)
+
+- **i18n 品牌文案(§3)**:各 app 的 `aiGskLoginBtn` 等 gsk 文案(63 个文件)、
+  slides 的 `errGskNotLoggedIn`(`errGskCli` 已改名 `errAiProviderUnset`,文案待改)、
+  793 处 genspark 提及
+- **shared/ipc 与 preload 的类型残留**:`ai:gsk-status` channel 常量、
+  `GenSparkAccountStatus` 类型(现无 main handler,调用会 reject)
+- **UI 面板引导**:未配置 AI 时给"去设置配置模型服务"提示(替代原登录引导)
