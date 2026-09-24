@@ -236,3 +236,34 @@
 - **AI**:默认与兜底 provider 均为 genspark;LLM 代理无 env 覆盖;`custom` provider 是唯一可指向自建的正式通道
 - **品牌**:用户可见面集中在 shell + electron-utils + cli;外链 6 个端点;i18n 提及 793 次但 key 集中
 - **遥测/更新**:无 Sentry/无远程配置/无运行时许可校验;更新器在鸿蒙不可用须整体移除
+
+---
+
+## 9. 实施进度
+
+### 阶段一:核心逻辑层(已完成)
+
+分支 `ohos/sota-debrand`(genoffice 仓),30 文件 +371/-586。
+
+- **ai-provider**:去 `genspark` provider / 端点 / 归属头 / 兜底;默认厂商切 `glm`(chat 1 处 + media 3 处);
+  `activeProvider`/`activeMediaProvider` 改**可空**(无有效配置返回 null,不再静默打向上游);
+  删 `gskToolsEnabled` 与 `cloudToolsEnabled()`;可用性谓词去掉 gsk 参数
+- **搜索**:链切 `custom → bocha → serper → tavily → DuckDuckGo`(墙外三家按要求保留);
+  新增 `bochaWebSearch`(api.bochaai.com)与 `customWebSearch`(兼容 SearXNG JSON 与极简契约);
+  provider 目录 `bocha/serper/tavily/custom`,默认 `bocha`
+- **apps / cli**:3 处 `ai:get-settings` 适配可空;5 处媒体谓词调用去 gsk 参数;
+  docs 的 `gskToolsEnabled` 修复逻辑与 4 处 genspark 分支清理;cli `capabilities` 去 gsk
+
+**验证**:ai-provider 18 文件 / 225 测试通过;ai-search 4 文件 / 56 测试通过;
+全量 typecheck 仅剩下述既有问题。
+
+**已知问题(基线即有,非本次引入)**:`packages/html2docx/src/convert.ts:317` TS2769。
+stash 全部改动后在基线 `339470d` 上可复现**同一错误**;不阻塞构建(`build:all` 不含 typecheck)。
+
+### 阶段二(待做)
+
+- **账号链移除(§1)**:`gsk.ts` / `genoffice-auth.ts` 文件删除、apps 的 gsk 注入死分支、
+  `ai:gsk-status` 通道、cloud-projects、云幻灯片;按 §1 的**自底向上顺序**执行
+- **UI 面板引导**:未配置时给"去设置配置模型服务"提示(替代原登录引导)
+- **i18n 文案(§3)**:793 处 genspark 提及
+- **shim 造测试文件桩**:解决真机基线 B4 阻塞(公共目录 hdc 不可写,须由应用侧生成)
