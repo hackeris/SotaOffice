@@ -12,8 +12,8 @@
 | # | 问题 | 选项 | 影响面 |
 |---|---|---|---|
 | **D1** | **AI 后端走哪条路** | ✅ **已定:纯 BYOK**(2026-09-24 用户决定:无自有网关)。AI 能力全部走用户自备 key;`custom` provider 保留,供有网关的用户自填 OpenAI 兼容端点 | 决定第 1、2 章范围与"是否保留登录" |
-| **D2** | **是否保留账号体系** | 若 D1=① 或 ②,无自有账号 → **整体移除**(登录 UI/IPC/凭据/credits/云项目) | 第 1 章 |
-| **D3** | **搜索/生图/媒体解析怎么办** | ①保留免费兜底(DuckDuckGo 无 key 可用)+ BYOK ②自建 ③移除 | 第 2 章尾部 |
+| **D2** | **是否保留账号体系** | ✅ **已定(2026-09-24):整体移除**——D1 为纯 BYOK 且无自有网关,没有账号可挂(登录 UI / IPC / 凭据 / credits / 云项目全清) | 第 1 章 |
+| **D3** | **搜索/生图/媒体解析怎么办** | ✅ **已定(2026-09-24)**:搜索 = 删 gsk + **补国内 provider** + **加 custom 端点**,墙外服务(Serper / Tavily / DuckDuckGo)保留;生图 / 媒体解析 = 纯 BYOK(与 D1 同一厂商) | 第 2 章尾部 |
 
 **现状关键事实**(便于判断):未登录**不阻塞**本地编辑/转换/OCR/MCP/CLI——受影响的只有云端 AI 能力。
 
@@ -62,10 +62,41 @@
 
 ## 0.2 D3 落地方案(搜索 / 生图 / 媒体解析)
 
-**搜索——近乎零成本**(现有结构已是链式降级,只需删上游分支):
-- 现状:`G/packages/ai-search/src/index.ts:136-172` = gsk → Serper(env key) → Tavily(env key) → **DuckDuckGo(匿名、无需 key)**
-- 改动:①删 `:136-151` 的 gsk 分支 ②`search-settings.ts:8-21` 默认 provider 由 `genspark` 改 `serper`(无 key 自动落 DuckDuckGo)
-- 结果:**零后端可用**;有 Serper/Tavily key 的用户自动优先,图片搜索同链(`:176-235`)
+**搜索——删上游分支 + 补国内后端(2026-09-24 决策)**:
+
+- **现状链**(`G/packages/ai-search/src/index.ts:141-172`):gsk(登录态) → Serper → Tavily → **DuckDuckGo**(无需 key,抓 `html.duckduckgo.com` HTML) → 失败返回 `method:'error'`。provider 目录在 `G/packages/ai-provider/src/search-settings.ts:8-14`(**不在 ai-search 包内**,仅三家 `genspark`/`serper`/`tavily`)
+- ⚠ **国内可用性事实**:链上三级(Serper `google.serper.dev`、Tavily、DuckDuckGo)**均无法国内直连**;DuckDuckGo 还是 HTML 抓取且超时 `FALLBACK_TIMEOUT_MS=5000`。故"删 gsk 即零后端可用"**对国内不成立**——不补后端时的表现是"点搜索等 5 秒后失败"
+- **决策**:①删 gsk 分支 ②**补一家国内搜索 provider**(下以 **博查 Bocha** 为例)③**加 `custom` 搜索端点**(自建 SearXNG 等)④**墙外服务 Serper/Tavily/DuckDuckGo 全部保留**
+
+改动清单(自下而上五层;用户自填 key 的通路**已存在**——`search-tools.ts` 的 `testSearchProvider` 即设置页"测试"按钮,无需新建 IPC):
+
+| 层 | 位置 | 改动 |
+|---|---|---|
+| 类型 | `G/packages/ai-provider/src/types.ts:108` | `AiSearchProviderId` 删 `'genspark'`,加 `'bocha' \| 'custom'` |
+| 类型 | 同上 `:110-116` | `AiSearchProviderMeta` 加 `baseUrlPlaceholder?: string`(custom 用) |
+| 类型 | 同上 `:120` | `providers` 值类型加 `baseUrl?: string`(custom 用) |
+| 目录 | `G/packages/ai-provider/src/search-settings.ts:8-14` | `AI_SEARCH_PROVIDERS` 删 genspark 项,加 bocha / custom 两项 |
+| 目录 | 同上 `:17-19` | `defaultAiSearchSettings()` 默认 `provider` 由 `'genspark'` 改新默认(见"待定") |
+| 目录 | 同上 `:35-44` | `activeSearchProvider()` **删两处 `return 'genspark'` 回落** → 无 key / 未知 id 返回"无搜索"(与 §0.1 第 2 条同病同治) |
+| 实现 | `G/packages/ai-search/src/index.ts` | 新增 `bochaWebSearch()`:`POST https://api.bochaai.com/v1/web-search`,`Authorization: Bearer <key>`,body `{query, count, summary:false}`,解析 `data.webPages.value[]` → `{title:name, url, snippet}` |
+| 实现 | 同上 | 新增 `customWebSearch()`:请求用户填的 baseUrl,解析契约见下 |
+| 实现 | 同上 `:145-172` | `webSearch()` 删 gsk 分支;候选链接入 bocha / custom |
+| 实现 | 同上 `:181-233` | `imageSearch()` 同链同改 |
+| 桥接 | `G/packages/ai-search/src/search-tools.ts:19-27` | `searchOptionsFromSettings()` 加 bocha / custom 分支(custom 须连 baseUrl 一并传入) |
+| 桥接 | 同上 `:38-56` | `testSearchProvider()` 加同样分支 |
+| UI | `G/apps/shell/src/renderer/src/SettingsModal.tsx:869-895` | 提示文案**硬编码了三分支**(`genspark` / `imageSearch` / 其他)→ 改按目录 meta 驱动;custom 增 baseUrl 输入框 |
+| UI | 同上 `:658-668` | "测试"调用补 baseUrl 参数 |
+| i18n | 各语言 `strings.ts` | 新增 bocha / custom 的 label 与提示 |
+
+**国内后端选型**:博查 Web Search(`api.bochaai.com/v1/web-search`,POST)——国内直连、响应约 1s、约 ¥0.036/次,响应格式**兼容 Bing Search API**。备选:**智谱 Web Search API**——若 §0.1 的默认 AI 厂商选 `glm`,可与对话/生图**复用同一个 key**(少一次注册),选型时一并权衡。
+
+**`custom` 端点契约**(建议兼容两种,同一解析器可吃掉,实现成本相同):
+- **SearXNG JSON**:`{results:[{title, url, content}]}`(自建最常见)
+- **极简契约**:`{results:[{title, url, snippet}]}`
+
+**待定(实施前定)**:
+1. **默认 provider**:建议 `bocha`(国内直连)。注意此项只决定设置页下拉初值——**无 key 时任何 provider 都产生不了可用后端**,真正要紧的是"未配置时给配置引导,而非静默失败"(同 §0.1)
+2. `custom` 的图片搜索:`AiSearchProviderMeta.imageSearch` 是静态布尔,自定义端点无法预知 → 建议标 `false`(图片搜索仍走 DuckDuckGo 兜底)
 
 **生图 / 媒体解析——同为 BYOK**:
 - 现状:`media.ts` 的 `AI_MEDIA_PROVIDERS` 首项为 genspark;`defaultAiMediaSettings()` 的 image/analysis/videoAnalysis **三个默认值全是 genspark**,与 chat 侧一致
@@ -73,7 +104,7 @@
 - 改动:删 genspark 项;**三个默认值一并换成与 D1 同一个厂商**(须在 chat ∩ media 交集内,见 §0.1)
 - 未配 key 时:生图/解析入口给**配置引导**,不得报错或静默失败
 
-**工作量**:搜索 0.5 人日;生图/媒体 1–2;D1 主体 2–4(含回退逻辑重写与各面板提示)。
+**工作量**:搜索 **2–2.5 人日**(原估 0.5 仅算"删";新增两个 provider + 类型/UI 字段后上调);生图/媒体 1–2;D1 主体 2–4(含回退逻辑重写与各面板提示)。
 
 ---
 
