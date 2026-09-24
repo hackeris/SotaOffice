@@ -31,14 +31,21 @@
 
 **默认 provider 建议**(实施时定,影响首启体验):
 
-| 候选 | 理由 | 注意 |
-|---|---|---|
-| `deepseek` | 国内可直连、成本低、OpenAI 兼容 | 确认所选模型支持 vision(文档截图分析) |
-| `dashscope`(通义) | 国内直连、多模态齐 | — |
-| `openai` | 生态最通用 | 国内不可直连 |
-| 首启引导选择 | 最中立 | 需新增引导 UI(成本 +) |
+**选型硬约束**:默认厂商必须**同时存在于两套目录**(chat 的 `AI_PROVIDERS` × media 的 `AI_MEDIA_PROVIDERS`),
+否则会出现"对话能用、生图不通"。两边**都有的 id**:`openai` `gemini` `doubao` `glm` `qwen` `xai` `minimax` `custom`;
+其中 `minimax` 在 media 侧**无 analysisModels**(只能生图不能解析);`deepseek`/`kimi`/`anthropic`/`mistral` 等**只在 chat 侧**。
 
-> 建议 `deepseek` 为默认(国内直连),设置页保留全部 BYOK 厂商 + `custom`(供自带网关/自建端点的用户覆盖)。
+> **现状说明**:三处默认值当前**已经统一**为 `genspark`——改造时须**一并替换为同一新厂商**,不可只改一处(它们是三套独立目录,最易漏改)。
+
+| 候选 | 两侧模型 | 适合 |
+|---|---|---|
+| **`qwen`**(通义) | 生图 `qwen-image-plus/image`;解析 `qwen3-vl-plus/flash` | **国内首选**——一个 key 通吃 |
+| **`doubao`**(豆包) | 生图 `doubao-seedream-5-0/4-5`;解析 `doubao-seed-2-1-pro/turbo` | 国内备选 |
+| **`glm`**(智谱) | 生图 `cogview-4/3-flash`;解析 `glm-4.6v/4.6v-flash` | 国内备选 |
+| `openai` / `gemini` | GPT Image / Gemini Image + 各自视觉模型 | 海外场景 |
+| `custom` | **两套目录均有**(模型由用户填) | 自带网关/自建端点用户 |
+
+> 建议默认 `qwen`(国内直连),设置页保留全部 BYOK 厂商 + `custom`(供自带网关/自建端点的用户覆盖,两侧都能配)。
 
 **要做的代码改动**:
 1. `providers.ts:304-323` `defaultAiSettings()`:`provider: 'genspark'` → 上述默认厂商 id
@@ -61,10 +68,9 @@
 - 结果:**零后端可用**;有 Serper/Tavily key 的用户自动优先,图片搜索同链(`:176-235`)
 
 **生图 / 媒体解析——同为 BYOK**:
-- 现状:`media.ts:20-34` 的 `AI_MEDIA_PROVIDERS` 首项为 genspark;`defaultAiMediaSettings()`(`:175-191`)的 image/analysis/videoAnalysis **三个默认值全是 genspark**
-- 现成 BYOK 通路已就绪:openai / gemini / ark / zhipu / xai / dashscope / minimax(各自带 imageProtocol / analysisProtocol / models)
-- 改动:删 genspark 项;三个默认值改为 **与 D1 默认厂商一致的"全模态"厂商**
-- **体验要点**:默认厂商最好**一个 key 通吃**(对话 + vision + 生图),避免用户配三四家——国内可选 **`dashscope`**(通义:Qwen-VL 视觉 + 万相生图)或 **`ark`**(豆包:视觉 + 即梦生图);海外用 `openai`(GPT + GPT Image)
+- 现状:`media.ts` 的 `AI_MEDIA_PROVIDERS` 首项为 genspark;`defaultAiMediaSettings()` 的 image/analysis/videoAnalysis **三个默认值全是 genspark**,与 chat 侧一致
+- **现成 BYOK 通路**(media 侧 id 与模型,均已配好):`openai`(gpt-image-* / gpt-5.6-*,两侧齐)· `gemini`(gemini-3*-image / gemini-3*)· `doubao`(seedream-5-0/4-5 / seed-2-1-pro/turbo)· `glm`(cogview-4/3-flash / glm-4.6v)· `xai`(grok-imagine / grok-4.6)· `qwen`(qwen-image-plus / qwen3-vl-plus)· `minimax`(image-01,**无解析模型**)· `custom`(模型用户填)
+- 改动:删 genspark 项;**三个默认值一并换成与 D1 同一个厂商**(须在 chat ∩ media 交集内,见 §0.1)
 - 未配 key 时:生图/解析入口给**配置引导**,不得报错或静默失败
 
 **工作量**:搜索 0.5 人日;生图/媒体 1–2;D1 主体 2–4(含回退逻辑重写与各面板提示)。
