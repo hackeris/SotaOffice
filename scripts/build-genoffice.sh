@@ -8,8 +8,9 @@
 #            modules/{docs,sheets,slides,pdf,markdown,html}/{preload,renderer}/  ← 裁掉 out/main 死重
 #            wasm/{pdfium,hb-subset}.wasm + THIRD-PARTY-NOTICES.txt
 # 链路:    sync-engine.sh(引擎)→ 本脚本(GenOffice app)→ build-ohos.sh(HAP+断言)
-# 前提:    --src 指向的 genoffice 仓(thirdparty/genoffice submodule)在 ohos/electron37
-#          分支;产物缺失时先重建:cd thirdparty/genoffice && npm ci(--ignore-scripts
+# 前提:    --src 指向的 genoffice 仓(thirdparty/genoffice submodule)在允许分支
+#          (ohos/electron37 上游基线 / ohos/sota-debrand Sota Office 改造);
+#          产物缺失时先重建:cd thirdparty/genoffice && npm ci(--ignore-scripts
 #          + ELECTRON_MIRROR=npmmirror 手动 install.js,cargo 须在 PATH) && npm run build:all;
 #          不指定 --no-build 则脚本内自动跑 npm run build:all
 # 断言:    main 字段/bundle>5MB/六模块 preload+renderer/死重已裁/wasm 头/无 symlink/
@@ -38,7 +39,13 @@ MODULES="docs sheets slides pdf markdown html"
 echo "==> [1/4] 源校验(mode=$MODE src=$SRC)"
 if [ "$MODE" = "genoffice" ]; then
   BR=$(git -C "$SRC" branch --show-current 2>/dev/null || echo none)
-  [ "$BR" = "ohos/electron37" ] || { echo "FATAL: $SRC 不在 ohos/electron37 分支(当前:$BR)" >&2; exit 1; }
+  # 允许的分支:ohos/electron37(上游基线)与 ohos/sota-debrand(Sota Office 改造分支)。
+  # 守卫的意义是挡住"在别的分支上误构建":branch 名是唯一可靠的判据(改分支名会
+  # 同时改这里);新增工作分支时一并加进来,不要放宽成前缀匹配。
+  case "$BR" in
+    ohos/electron37|ohos/sota-debrand) ;;
+    *) echo "FATAL: $SRC 不在允许分支(当前:$BR;允许 ohos/electron37 / ohos/sota-debrand)" >&2; exit 1 ;;
+  esac
   grep -q '"electron": "37.2.0"' "$SRC/package.json" || { echo "FATAL: 根 package.json 未 pin electron 37.2.0" >&2; exit 1; }
   if [ "$DO_BUILD" = "1" ]; then
     echo "    npm run build:all(docs→…→cli→shell,数分钟)…"
