@@ -43,7 +43,9 @@
         "reason": "$string:access_pasteboard",
         "usedScene": { "abilities": ["EntryAbility"], "when": "always" }
       },
-      // 三目录:system_grant,装上即授予;shim 第⑦桩探测可写后自动切系统目录
+      // 三目录:ACL user_grant——装上不等于已授予。声明+profile 覆盖之后,
+      // 还须在窗口就绪后走 requestPermissionsFromUser 申请;只声明不申请时
+      // 写用户目录会 EPERM(2026-09-24 实测)。详见 docs/PERMISSIONS_ACL.md
       // (HAR 模块权限必须带 reason,否则 hvigor 00303222)
       {
         "name": "ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY",

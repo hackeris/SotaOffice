@@ -1,6 +1,6 @@
 # POC-2:GenOffice × electron@37.2.0 兼容性断点清单
 
-> 生成:2026-09-19 17:33:25 | 工作区:/data/share/smartoffice/.temp/genoffice-e37 | 原版本:43.3.0
+> 生成:2026-09-19 17:33:25 | 工作区:.temp/genoffice-e37 | 原版本:43.3.0
 > 方法:typecheck(electron@37 .d.ts)/ build(electron-vite)/ 冒烟(xvfb)
 
 ## 1. typecheck(electron@37 类型层)
@@ -23,8 +23,8 @@ npm error Lifecycle script `typecheck` failed with error:
 npm error code 2
 npm error command failed
 npm error command sh -c tsc --noEmit
-npm error location /data/share/smartoffice/.temp/genoffice-e37/apps/html
-npm error path /data/share/smartoffice/.temp/genoffice-e37/apps/html
+npm error location .temp/genoffice-e37/apps/html
+npm error path .temp/genoffice-e37/apps/html
 npm error workspace @genoffice/html@0.1.0
 ```
 ## typecheck-file-parse ✅ 通过
@@ -48,8 +48,8 @@ npm error Lifecycle script `typecheck` failed with error:
 npm error code 2
 npm error command failed
 npm error command sh -c tsc --noEmit
-npm error location /data/share/smartoffice/.temp/genoffice-e37/apps/docs
-npm error path /data/share/smartoffice/.temp/genoffice-e37/apps/docs
+npm error location .temp/genoffice-e37/apps/docs
+npm error path .temp/genoffice-e37/apps/docs
 npm error workspace @genoffice/docs@0.1.0
 ```
 ## typecheck-sheets ✅ 通过
@@ -62,8 +62,8 @@ npm error Lifecycle script `typecheck` failed with error:
 npm error code 2
 npm error command failed
 npm error command sh -c tsc --noEmit
-npm error location /data/share/smartoffice/.temp/genoffice-e37/apps/shell
-npm error path /data/share/smartoffice/.temp/genoffice-e37/apps/shell
+npm error location .temp/genoffice-e37/apps/shell
+npm error path .temp/genoffice-e37/apps/shell
 npm error workspace @genoffice/shell@0.10.0
 ```
 ## typecheck-slides ✅ 通过
@@ -78,8 +78,8 @@ npm error Lifecycle script `typecheck` failed with error:
 npm error code 2
 npm error command failed
 npm error command sh -c tsc --noEmit
-npm error location /data/share/smartoffice/.temp/genoffice-e37/apps/html
-npm error path /data/share/smartoffice/.temp/genoffice-e37/apps/html
+npm error location .temp/genoffice-e37/apps/html
+npm error path .temp/genoffice-e37/apps/html
 npm error workspace @genoffice/html@0.1.0
 ```
 
@@ -117,8 +117,8 @@ npm error code 127
 npm error command failed
 npm error command sh -c cargo build --release --manifest-path native/xlsx-engine/Cargo.toml --config native/xlsx-engine/.cargo/config.toml
 npm error command sh -c npm run native:build && electron-vite build
-npm error location /data/share/smartoffice/.temp/genoffice-e37/apps/sheets
-npm error path /data/share/smartoffice/.temp/genoffice-e37/apps/sheets
+npm error location .temp/genoffice-e37/apps/sheets
+npm error path .temp/genoffice-e37/apps/sheets
 npm error workspace @genoffice/sheets@0.1.0
 ```
 ## build-shell ✅ 通过

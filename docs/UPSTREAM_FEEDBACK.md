@@ -1,7 +1,7 @@
 # 上游回馈材料(Electron-OHOS fork 实测问题)
 
 > 状态:2026-09-23 整理(M1 真机验收 + M2 排查产物),可直接转为 upstream issue
-> 环境:OHOS API 26 / 2in1(MateBook Pro S) / `electron-v37.2.0-openharmony`
+> 环境:OHOS API 26 / 2in1 / `electron-v37.2.0-openharmony`
 > 纪律:每条标注**证据等级**——`实测`=有可复现数据;`定位`=已缩小到代码范围;`源码`=在 fork 源码中直接可见
 
 | # | 问题 | 证据等级 | 影响面 |

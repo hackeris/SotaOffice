@@ -2,7 +2,7 @@
 
 > 状态:**已定稿**(2026-09-19,关键决策经逐项确认)
 > 分区:移植方案 | 目标:HarmonyOS PC(2in1)优先
-> 配套文档:`docs/appendix/`(三份源码级分析报告)、后续 `KEYPOINTS.md`(不可变决策+踩坑)、`FEATURE_MATRIX.md`(能力矩阵+验收)
+> 配套文档:`docs/appendix/`(三份源码级分析报告);决策与踩坑见 §0 与 `docs/PITFALLS.md`,能力矩阵与验收见 `docs/ELECTRON_OHOS_CHECKLIST.md` §5 与 `docs/M1_ACCEPTANCE.md`
 
 ---
 
@@ -22,7 +22,7 @@
 
 ## 1. 背景与对象
 
-**GenOffice**(`/data/share/smartoffice/.temp/genoffice`):开源 AI Office 套件(Docs/Sheets/Slides/PDF/Markdown/HTML + AI 面板),Electron 43.3 + Node ≥22.12 + npm workspaces monorepo,约 55 万行 TS(渲染层 35.5 万 + 主进程 5.4 万 + 引擎包 14.3 万)。
+**GenOffice**(源码副本在 `.temp/genoffice`):开源 AI Office 套件(Docs/Sheets/Slides/PDF/Markdown/HTML + AI 面板),Electron 43.3 + Node ≥22.12 + npm workspaces monorepo,约 55 万行 TS(渲染层 35.5 万 + 主进程 5.4 万 + 引擎包 14.3 万)。
 
 对移植关键的仓库特征(详见附录 A):
 
@@ -97,7 +97,7 @@
 |---|---|---|
 | POC-1 | AGC 发布侧权限申请提交(`ALLOW_WRITABLE_CODE_MEMORY` 等);审批与开发并行 | 待启动(应 M0 第一天发出) |
 | **POC-2** | 本机 Linux `electron@37` 跑完整 GenOffice,产出 43→37 断点清单(typecheck + build + 六模块冒烟) | **✅ 完成(含全仓测试):类型/构建/测试三层 electron 相关断点 = 0**(typecheck+build 25 包;测试 23 包 17 直接过、6 失败全定性为环境缺件/root 假失败/jsdom 差异;运行时行为差异待 POC-3 真机)。报告 `poc2-breakage-report.md` |
-| POC-0/3 | 搬 web_engine HAR + entry 骨架,空 Electron app 真机点亮;继而 GenOffice shell 真机点亮(shim + `genoffice-app://` + IPC 样例) | **✅ 真机点亮(2026-09-20,MateBook Pro S/2in1/API 26)**:完整进程树(:GPU×2/:NetworkService/:Renderer);shim-log 全链打点;自检 9 项 8 PASS 1 预期降级;详见 §9 真机实测记录 |
+| POC-0/3 | 搬 web_engine HAR + entry 骨架,空 Electron app 真机点亮;继而 GenOffice shell 真机点亮(shim + `genoffice-app://` + IPC 样例) | **✅ 真机点亮(2026-09-20,2in1 真机 / API 26)**:完整进程树(:GPU×2/:NetworkService/:Renderer);shim-log 全链打点;自检 9 项 8 PASS 1 预期降级;详见 §9 真机实测记录 |
 | POC-4 | `cargo build --target aarch64-unknown-linux-ohos`(+crt-static)编 xlsx-sidecar → executableBinaryPaths 注册 → spawn 跑通 `read_range`;**验收:HAP 不含 LOAD_INDEPENDENT_LIBRARY** | **✅ 真机闭环(2026-09-20)**:spawn 存活、exec 放行(XPM/executableBinaryPaths 实证);HAP 不含 LOAD_INDEPENDENT_LIBRARY(trim 已固化) |
 | POC-5 | pdfium.wasm 在 fork Node 主进程 init + 打开中文 PDF;hb-subset/harfbuzz 同验 | **✅ 真机 spot check(2026-09-20)**:pdfium.wasm 在真机 JIT/W^X 下 init+LoadMemDocument+页数+文本提取全通 |
 | POC-6 | CJK 字体:docs 内嵌 woff2 + slides 字体表 OH 版,视觉对比桌面版 | 待启动 |
@@ -159,16 +159,16 @@ MCP/CLI 生态(fork 上 `ELECTRON_RUN_AS_NODE` 已被 hos_vscodium 验证;届时
 
 | 资产 | 位置 | 用途 |
 |---|---|---|
-| **本工程(正式仓)** | **`/data/share/smartoffice`**(git;`.temp/` 仅放临时研究素材,用户定的纪律) | Electron-OHOS 壳工程 + 文档 + 一键构建链 |
-| GenOffice 源 | `/data/share/smartoffice/.temp/genoffice` | 移植对象(临时副本,保持干净) |
-| POC-2 工作区 | `/data/share/smartoffice/.temp/genoffice-e37` | electron@37 适配清点(临时素材,不入库) |
-| 官方指导项目克隆 | `/data/share/smartoffice/.temp/ohos-sig-electron`(3.3G) | 官方文档/API 矩阵来源(临时素材) |
-| hos_vscodium | `/data/share/smartoffice/.temp/hos_vscodium` | web_engine HAR + entry 骨架 + shim/napi-dyn/签名脚本,整体搬用(sync-engine.sh 源) |
-| wineohos | `/data/share/wineohos` | 多实例姿势实证参考(launchType multiton) |
-| Pure Office | `/data/share/office` | 交叉编译工具链(core3d/ohos-arm64.toolchain.cmake)、deploy/验收链、文档方法论 |
-| OHOS SDK | `/data/share/ohos-sdk`(6.1.0,API 23) | NDK(sysroot/clang)、ets、toolchains(hdc) |
-| 构建容器 | `/data/share/run_hoa_container.sh`(docker ubuntu:26.04 + command-line-tools@/apps/harmony) | hvigor/ohpm 构建环境 |
-| 签名材料 | `/data/share/hap/.ohos/config/` | 调试证书(跨项目共享目录) |
+| **本工程(正式仓)** | **本仓库根**(git;`.temp/` 仅放临时研究素材,用户定的纪律) | Electron-OHOS 壳工程 + 文档 + 一键构建链 |
+| 应用源码 | `.temp/genoffice` | 移植对象(临时副本,保持干净) |
+| POC-2 工作区 | `.temp/genoffice-e37` | electron@37 适配清点(临时素材,不入库) |
+| 官方指导项目克隆 | `.temp/ohos-sig-electron`(3.3G) | 官方文档/API 矩阵来源(临时素材) |
+| 运行时底座参考源 | `.temp/hos_vscodium` | web_engine HAR + entry 骨架 + shim/napi-dyn/签名脚本,整体搬用(sync-engine.sh 源) |
+| 多实例参考工程 | 本机另一工程 | 多实例姿势实证参考(launchType multiton) |
+| 移植方法论参考工程 | 本机另一工程 | 交叉编译工具链(core3d/ohos-arm64.toolchain.cmake)、deploy/验收链、文档方法论 |
+| OHOS SDK | `<OHOS-SDK>`(6.1.0,API 23) | NDK(sysroot/clang)、ets、toolchains(hdc) |
+| 构建容器 | 容器启动脚本(docker ubuntu:26.04 + command-line-tools) | hvigor/ohpm 构建环境 |
+| 签名材料 | 本机签名材料目录 | 调试证书(跨项目共享目录) |
 | Rust OHOS | `rustup target add aarch64-unknown-linux-ohos`(ohos.rs;OHOS_NDK_HOME 指向上述 SDK) | sidecar 交叉编译 |
 
 ## 8. 附录
@@ -182,9 +182,9 @@ MCP/CLI 生态(fork 上 `ELECTRON_RUN_AS_NODE` 已被 hos_vscodium 验证;届时
 
 **鸿蒙工程骨架已搭建并构建通过**(阶段 1,POC-0 地基):
 
-- 位置:本仓库根(`genoffice-ohos/`),参考 `/data/share/office` 结构;
-- 包名/签名:**复用 comfy(MagicFlow)的 `app.fuqidian.magicflow` + `/data/share/hap/.ohos/config/default_MagicFlow_*` 调试材料**(复用条件:bundleName 与证书一致;未来独立上架时换正式包名重新生成材料);
-- 构建:**当前环境即 hoa 容器**(hvigorw 在 `/apps/harmony/bin`,SDK 在 `/apps/harmony/sdk/default/openharmony`,无需另起 docker);
+- 位置:本仓库根,参考另一工程的结构;
+- 包名/签名:**复用调试档的 `app.fuqidian.magicflow` + 本机签名材料目录下的 `default_MagicFlow_*` 材料**(复用条件:bundleName 与证书一致;未来独立上架时换正式包名重新生成材料);
+- 构建:**当前环境即构建容器**(hvigorw 与 SDK 由容器提供,无需另起 docker);
 - 一键构建:`scripts/build-ohos.sh`(`set -eo pipefail` + HAP 存在/大小/module.json 断言),产物 `entry/build/default/outputs/default/entry-default-signed.hap`(219KB,12 files,SignHap 通过);
 - 模板纪律:`build-profile.json5`(含签名,gitignore)/ `build-profile.json5.template`(无签名,入库),同 office;
 - 当前 entry 为最小骨架(deviceTypes tablet/2in1,无权限声明、无文件关联——待 POC-0 后与能力同步上线)。
@@ -205,7 +205,7 @@ MCP/CLI 生态(fork 上 `ELECTRON_RUN_AS_NODE` 已被 hos_vscodium 验证;届时
 - **演练抓到的缺口(已修)**:①hvigor 不自动 ohpm install(Cannot find module 'web_engine' 22 连错)→ 固化进脚本;②template 落后(缺 web_engine 注册)→ OhmUrl 15 连错 → 重建 template+签名注入机制;③签名口令只存在 build-profile.json5 里,rm 后险些丢失 → .signing.snippet(gitignore)单点保存。
 - **真机步骤**(等设备):`hdc app install entry-default-signed.hap`(9568332 先 bm uninstall)→ 桌面开 GenOffice → 自检页"全部运行" → 逐项记录;IME/三键/托盘人工勾选;`hdc fport tcp:9333` 连 Playwright/DevTools;崩溃看 shim-log + hilog(包名/APPSPAWN 定位法,清单 §7)。
 
-## 10. 真机实测记录(2026-09-20,MateBook Pro S MOR-M1 / 2in1 / API 26)
+## 10. 真机实测记录(2026-09-20,2in1 真机 / API 26)
 
 **POC-0/3/4/5 一次闭环:自检 HAP 安装、点亮、CDP 远程自检全部完成。**
 
@@ -322,10 +322,12 @@ MCP/CLI 生态(fork 上 `ELECTRON_RUN_AS_NODE` 已被 hos_vscodium 验证;届时
 
 ### 11.7 剩余
 
-- **G4** 逐模块操作验收:七级表见 `docs/M1_ACCEPTANCE.md`(0 已过);
-- **G5** e2e smoke 七用例:`scripts/e2e/ohos-smoke.mjs` 就位(ws 依赖已入正式仓);
-- **G6** 毁灭性重建演练(rm web_engine+oh_modules+resfile/resources+build-profile → 三脚本全绿);
-- ACL 权限:声明已按终态入库(见 §11.8);待 sotaoffice profile 到位做真机回归(`docs/M1_ACCEPTANCE.md` §4.4)。
+> 本节写于 M1 中期。所列项目**现已全部完成**,保留作记录;当前状态见 `M1_ACCEPTANCE.md`。
+
+- ~~**G4** 逐模块操作验收~~ —— 七级全绿;
+- ~~**G5** e2e smoke 七用例~~ —— 7/7 通过;
+- ~~**G6** 毁灭性重建演练~~ —— 三脚本全绿;
+- ~~ACL 权限真机回归~~ —— 2026-09-24 profile 到位,五件全通。
 
 ### 11.8 包名/权限切终态(2026-09-23,M2)
 

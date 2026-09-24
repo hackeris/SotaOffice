@@ -1,6 +1,6 @@
 # 附录 B:Pure Office(ONLYOFFICE 鸿蒙移植)方法论摘要
 
-> 来源:2026-09-19 对 `/data/share/office` 的深度调研(135 commit,已产品化 1.0.46,真机 MateBook Pro)。该走 **B 路线**(ArkTS 壳 + ArkWeb + x2t NAPI),对本项目的价值是**方法论与工具链资产**,以及 A/B 路线的选型判据。
+> 来源:2026-09-19 对另一移植工程的深度调研(135 commit,已产品化 1.0.46,经 2in1 真机验证)。该工程走 **B 路线**(ArkTS 壳 + ArkWeb + x2t NAPI),对本项目的价值是**方法论与工具链资产**,以及 A/B 路线的选型判据。
 
 ## 1. 它的架构(为什么与我们不同)
 
@@ -10,7 +10,7 @@ ArkTS 薄壳(ArkUI)包系统 ArkWeb 渲染 ONLYOFFICE web-apps/sdkjs;C++ core(x2
 
 | 资产 | 位置 | 复用方式 |
 |---|---|---|
-| 交叉编译工具链 | `scripts/onlyoffice/core3d/ohos-arm64.toolchain.cmake`(BiSheng clang,`--target=aarch64-linux-ohos --sysroot=$NDK/sysroot`) | 任何 C/C++ 依赖交叉编译模板;NDK 本机在 /data/share/ohos-sdk |
+| 交叉编译工具链 | `scripts/onlyoffice/core3d/ohos-arm64.toolchain.cmake`(BiSheng clang,`--target=aarch64-linux-ohos --sysroot=$NDK/sysroot`) | 任何 C/C++ 依赖交叉编译模板;NDK 在 OHOS SDK 下 |
 | 一键部署验收链 | `scripts/onlyoffice/deploy_ohos.sh`(装配→hvigor→hdc install→重启→探针;**hdc install 失败 rc 仍为 0,必须匹配输出文本**;`set -eo pipefail`) | 直接套用为 genoffice-ohos 的 deploy 脚本模式 |
 | hvigor 工程骨架 | `build-profile.json5.template`(签名不入库)、单 entry 模块、ohpm file: 本地包装 .so | entry 模块模板 |
 | 文件关联 skills 声明 | `module.json5`:`ohos.want.action.viewData` + entities 留空 + UTD 逐条枚举 + linkFeature FileOpen | GenOffice 的 .docx/.xlsx/.pptx/.pdf/.md/.html 关联 |

@@ -1,6 +1,6 @@
 # 附录 C:hos_vscodium / Electron-OHOS 运行时工程细节
 
-> 来源:2026-09-19 对 `/data/share/smartoffice/.temp/hos_vscodium`(atomgit.com/nanqube/hos_vscodium-opensource)的克隆分析。VSCodium 1.126.0 跑在 openharmony-sig/electron `electron-v37.2.0-openharmony`(Chromium 138.0.7204.45 + Node 22.17.0),真机 MateBook Pro 验证。**web_engine HAR 是本项目 A 路线的运行时底座。**
+> 来源:2026-09-19 对运行时底座工程(`.temp/hos_vscodium`)的克隆分析。它把 VSCodium 1.126.0 跑在 openharmony-sig/electron `electron-v37.2.0-openharmony`(Chromium 138.0.7204.45 + Node 22.17.0)上,经 2in1 真机验证。**web_engine HAR 是本项目 A 路线的运行时底座。**
 
 ## 1. 运行时形态(web_engine HAR)
 

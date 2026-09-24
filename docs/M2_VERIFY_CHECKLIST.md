@@ -37,7 +37,7 @@
 | B3 | 文档真打开 | 同上,看 UI | 进 docs 模块并渲染该文档 | ✓ target 标题=文件名 |
 | B4 | 六类抽验 | xlsx / pptx / pdf / md / html | 各进对应模块 | docx ✓ 余待测 |
 | B5 | 未知类型 | 双击 .txt | 回落 Home(不崩) | 待测 |
-| B6 | **热启动** | 应用运行时再开文件 | — | ✗ **白窗口**(缺口与根因见 `PORT_DESIGN.md` §11.9) |
+| B6 | **热启动** | 应用运行时再开文件 | — | ✅ 已修:连续六次 `aa start -U` 均开新 tab 并渲染(见下方实测记录) |
 
 > B3 是**关键不确定点**:want.uri 的临时授权 × 三目录 ACL 能否让 Chromium 以 POSIX 路径读到文件。
 
@@ -104,27 +104,27 @@
 hdc file send entry/build/default/outputs/default/entry-default-signed.hap /data/local/tmp/go.hap
 hdc shell "bm install -p /data/local/tmp/go.hap && aa start -a EntryAbility -b app.fuqidian.sotaoffice"
 # ⚠ 装机后必须授权,否则应用静默退出(见顶部硬门槛);脚本自动点三次"允许"+重启+核验
-bash scripts/grant-acl.sh 192.168.1.5:44959
+bash scripts/grant-acl.sh <device>
 
 # shim 日志(首选:直读沙箱物理路径,不受 flowcontrol 影响)
-hdc -t 192.168.1.5:44959 shell "tail -40 /data/app/el2/100/base/app.fuqidian.sotaoffice/files/shim-log.txt"
+hdc -t <device> shell "tail -40 /data/app/el2/100/base/app.fuqidian.sotaoffice/files/shim-log.txt"
 # 备选:hilog(-x 为非阻塞 dump 后退出;启动期日志常被流控丢弃)
 hdc shell "hilog -x | grep GO-SHIM"
 
 # 取证截图(比 hilog 直观;拉回本地后直接看图)
-hdc -t 192.168.1.5:44959 shell "snapshot_display -f /data/local/tmp/scr.jpeg"
-hdc -t 192.168.1.5:44959 file recv /data/local/tmp/scr.jpeg /tmp/scr.jpeg
+hdc -t <device> shell "snapshot_display -f /data/local/tmp/scr.jpeg"
+hdc -t <device> file recv /data/local/tmp/scr.jpeg /tmp/scr.jpeg
 
 # UI 自动化:先 dump 拿 bounds,再点其中心(系统弹窗与 Electron DOM 都可用)
-hdc -t 192.168.1.5:44959 shell "uitest dumpLayout -p /data/local/tmp/l.json"
-hdc -t 192.168.1.5:44959 file recv /data/local/tmp/l.json /tmp/l.json
-hdc -t 192.168.1.5:44959 shell "uitest uiInput click 1741 1132"
+hdc -t <device> shell "uitest dumpLayout -p /data/local/tmp/l.json"
+hdc -t <device> file recv /data/local/tmp/l.json /tmp/l.json
+hdc -t <device> shell "uitest uiInput click 1741 1132"
 
 # 探针(shim 桩⑯ 注入 shell 页,CDP 9333 可读):三目录落点/可写性 + 剪贴板授权信号
 node /tmp/probe-info.mjs                     # 打印 window.__GO_INFO__
 
 # 文件关联抽验(六类 + 未知类型回落;脚本内含前提与判据)
-bash scripts/verify-file-assoc.sh 192.168.1.5:44959
+bash scripts/verify-file-assoc.sh <device>
 ```
 
 > 文件关联抽验的**前提**:探针文件由 shim 桩⑱ 在应用侧生成(授权完成后冷启动一次即可),

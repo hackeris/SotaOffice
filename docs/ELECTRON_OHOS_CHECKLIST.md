@@ -247,7 +247,7 @@ M1 决策点:手工脚本(现状 scripts/build-ohos.sh,可控)vs electron-builde
 - [ ] **④ web_engine HAR:libs 三件套 + resfile 全量资源进 HAP**(collectAllLibs 只管 libs,resfile 靠 HAR 依赖自动合并)
 - [ ] **⑤ 继承链:MyAbilityStage extends WebAbilityStage + EntryAbility extends WebAbility + CustomChildProcess extends WebChildProcess;pages/Index 顶层 `CustomChildProcess.toString()`**
 - [ ] **⑥ main_pages.json 页全注册 + ability 命名(EntryAbility/StatelessAbility/TaskManagerAbility)**
-- [ ] **⑦ resfile/resources/app/:package.json(main=main-shim.mjs,type=module)+ shim 六件事 + shim-log**
+- [ ] **⑦ resfile/resources/app/:package.json(main=main-shim.mjs;禁带 type:module,见 §3)+ shim 六件事 + shim-log**
 - [ ] ⑧ Tray 或 AppWindowAdapter 注释(二选一,窗口显示策略)
 - [ ] ⑨ 多窗口三件套:multiAppMode + launchType specified + onAcceptWant(GenOffice 多标签需要)
 - [ ] ⑩ dev_config.json 放 entry libs(9333 e2e 通道)+ crash-hook 搬入

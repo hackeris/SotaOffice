@@ -1,6 +1,6 @@
 # 附录 A:GenOffice 架构与平台耦合点分析
 
-> 来源:2026-09-19 源码级逐包审查(渲染层/main/preload/packages 全量)。路径以 `/data/share/smartoffice/.temp/genoffice` 为根。
+> 来源:2026-09-19 源码级逐包审查(渲染层/main/preload/packages 全量)。路径以 `.temp/genoffice` 为根。
 
 ## 0. 总体规模
 
