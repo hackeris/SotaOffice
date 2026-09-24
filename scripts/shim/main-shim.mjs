@@ -557,6 +557,17 @@ if (process.env.GO_TEST_FILES !== '0') {
   }
 }
 
+// ---- ⑲ 退出诊断(临时;定位"bundle 加载成功却 15s 后退出")----
+// 现象(2026-09-24):shim 全桩就位 + `out/main/index.js loaded` 之后,应用约 15s 退出,
+// 且无 uncaughtException 记录,NetworkService 子进程 exit code 0。需区分:
+// "窗口全关触发 Electron 默认退出"(强嫌疑:窗口创建/加载失败会让它立刻触发)
+// / "应用主动 quit" / "被系统回收"。发布前移除本桩与桩⑱。
+app.on('window-all-closed', () => log('exit-diag: window-all-closed'))
+app.on('before-quit', () => log('exit-diag: before-quit'))
+app.on('will-quit', () => log('exit-diag: will-quit'))
+app.on('quit', (_e, code) => log(`exit-diag: quit code=${code}`))
+process.on('exit', (code) => log(`exit-diag: process exit code=${code}`))
+
 // ---- ⑫(预案)Tray 兜底 ----
 if (process.env.GO_SHIM_TRAY === '1') {
   try { new Tray(nativeImage.createFromPath(path.join(RESOURCES_DIR, 'app', 'icon.png'))); log('tray: GO_SHIM_TRAY 兜底已建') }

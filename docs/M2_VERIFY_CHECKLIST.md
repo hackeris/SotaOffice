@@ -1,8 +1,19 @@
 # M2 真机回归清单(sotaoffice profile 到位后执行)
 
 > 前置:新 profile(p7b)写入 `scripts/.signing.snippet`(材料路径+口令)→ `npm run build:ohos` → 装机(报 9568332 先 `bm uninstall`)
-> 判据:每条给**命令/操作 + 期望**;shim 日志走 hilog:`hdc shell "hilog | grep GO-SHIM"`(沙箱内文件日志 hdc 直读不可用)
+> 判据:每条给**命令/操作 + 期望**。
+> **shim 日志直读通道(2026-09-24 发现,首选)**:沙箱的**物理路径** hdc 可读——
+> `hdc -t <dev> shell "tail -40 /data/app/el2/100/base/app.fuqidian.sotaoffice/files/shim-log.txt"`
+> 此前用应用视角的 `/data/storage/el2/base/files/` 才报 Permission denied,两者不是同一路径。
+> 该通道不受 hilog flowcontrol 影响,启动期日志不再缺段。
 > 纪律:先记录基线事实,再定修复方案(不按推测改代码)
+>
+> **⚠ 装机后硬门槛(2026-09-24 实测,曾据此把"卡住"误判成"崩溃")**:三条 ACL
+> (文档/下载/桌面)是 user_grant,首次启动必弹系统模态授权框(1/3→3/3)。
+> **未授权(超时/拒绝)时窗口渲染进程不创建 → 应用走到 `window-all-closed`
+> 静默退出**:退出码 0、无 uncaughtException、`ps` 里连 renderer 都没有,现象酷似
+> 崩溃。**卸载重装会清空已授予的授权,故每次重装后都要跑** `bash scripts/grant-acl.sh`
+> (自动点三次"允许" + 重启 + 核验三目录落点)。
 
 ## A. ACL 五件(本轮切终态的核心)
 
@@ -49,26 +60,42 @@
 | D3 | 触屏操作 | 触屏点各处 UI | 记录死区与尺寸问题 |
 | D4 | 崩溃治理 | 反复开关文档/退出 | hilog 抓 `dlclose`/`SIGSEGV` 类记录 |
 
-## 本轮实测记录(2026-09-24,HAP 冷启动 + CDP/hilog 双通道)
+## 实测记录(2026-09-24;两轮:未授权 → 授权完成后同一 HAP 热重启)
+
+**第一轮(未授权)**:桩⑱ 造文件 EPERM、三目录全降级、无 renderer 进程——
+现象是"启动后卡住/静默退出",根因即上方 ACL 硬门槛。
+
+**第二轮(授权完成后)**:
 
 | 项 | 实测 | 证据 |
 |---|---|---|
-| A1 JIT | ✅ | Home 渲染正常(未单独验 PDF) |
-| A2/A3 剪贴板 | ✅ 已授权 | 探针 `clipGrant: granted` |
-| **A5 三目录落点** | ✅ **三条全可写** | 探针 `pathWritable: {documents:system, downloads:system, desktop:system}` |
+| A1 JIT | ✅ | Home 与六模块 UI 全渲染 |
+| A2 授权框 | ✅ | 截图:系统模态框依次 1/3 文档 → 2/3 下载 → 3/3 桌面 |
+| A3 剪贴板读侧 | ✅ | shim:`stub: clipboard 读侧已恢复(授权信号确认)` |
+| **A5 三目录落点** | ✅ **三条全可写** | shim:`documents/downloads/desktop: 系统目录可写`,不降级 |
+| A6 三目录写盘 | ✅ | 桌面可见 probe.{md,txt,html,pdf,docx,xlsx,pptx} 七个图标 |
 | A4 剪贴板端到端 | 待人工 | — |
-| A6 三目录写盘 | 间接 ✅ | shim 日志正写 `/storage/Users/currentUser/Documents/GenOffice/`;文件管理器可见性待人工 |
-| **B2/B3/B4 文件关联** | ⛔ **阻塞** | **测试文件已不存在**(`test.docx` 打开失败);**且 hdc 无法创建**——shell 对 `/storage/Users/` 是 `Permission denied`(命名空间隔离,非权限问题) |
-| B5 未知类型 | ✅ 不崩 | 三次 `.txt` 触发(`probe1-3.txt`)全程无崩溃,应用存活,targets 无异常 |
-| **B6 热启动链路** | ✅ **日志证明通路** | hilog:`open-document(hot): .../probe3.txt` ×3 —— **onNewWant → 路径解析全通**;受测试文件缺失影响,未验"文件真打开" |
-| C2 避让 | ✅ | `.tab-bar-caption-spacer` = **140px**(匹配系统容器 139.5px) |
-| C1/C3/C5 | 未验 | `uitest uiInput click` 执行成功("No Error")但窗口无响应——物理/vp 两套坐标均试过,**该自动化路径成本过高**;C1 关闭链此前已验(exit code 0) |
+| **B2/B3/B4 文件关联** | ✅ **六类全进对应模块** | `verify-file-assoc.sh`:六类 target 依次出现;窗口内六 tab 标题即文件名,html 正文已渲染 |
+| B5 未知类型 | ✅ **明确回执、不崩** | shim:`open-doc: reply {"ok":false,"reason":"unsupported"}`;UI 弹"暂不支持 .txt 类型" |
+| B6 热启动 | ✅ | 应用运行中 `aa start -U` 连续六次均开新 tab 并渲染 |
+| C1 三键 | ✅ **四动作全验** | 最小化(窗口隐/进程存)→ 最大化 `[0,0][3120,1955]` → 还原 `[266,119][2850,1830]`(回原位)→ 关闭(shim:`window-all-closed→before-quit→will-quit→exit code=0`) |
+| C2 避让 | ✅ | spacer=140px;窗口态与最大化态均与系统三键不重叠(截图) |
+| C3 避让自愈 | ✅ | 最大化↔还原全程 spacer 恒 140px(系统容器不变,无需修正) |
+| C5 应用图标 | 待目视 | — |
 | **D1 打印真实行为** | ❌ **不可用(静默取消)** | 传合法 `WorkbookExportPdfRequest` 调 `printWorkbook` → `{ok:false}`(无 error 字段)。对照 `sheets/pdf-export.ts:88-92`,**无 error 的 `{ok:false}` 只对应 `failureReason==='Print job canceled'`** → fork 的 `webContents.print()` **回调正常触发但恒失败**(未对接系统打印服务)。**降级方案据此定案:shim 拦截 print → printToPDF** |
 | **D2 设备能力上报** | ❌ **全空** | `hover/anyHover/pointer:fine/pointer:coarse/any-pointer:coarse` **全 false**,`maxTouchPoints: **0**`,`ontouchstart: false`;而 UA 自称 `(OHOS; PC; OpenHarmony 7.0.0; MOR-M1)`。⚠ **`pointer: fine` 与 `coarse` 双 false** 是最差组合:任何依赖这些媒体查询的 CSS 分支都会落空 |
 | D3 触屏 | 待人工 | 受 D2 全空影响,触屏行为需实测 |
-| D4 崩溃治理 | ✅ | 三次连续触发 + 冷启动切换,无 SIGSEGV/SIGABRT/CPP_CRASH/FaultLogger |
+| D4 崩溃治理 | ✅ | 多轮冷/热启动 + 六模块切换,无 SIGSEGV/SIGABRT/CPP_CRASH/FaultLogger |
 
-> **阻塞解法(下轮构建一并做)**:给 shim 加"造测试文件"桩——shim 是 Node 环境且有公共目录写权(日志已证),可生成 docx/xlsx/pptx/pdf/md/html 落 Desktop,随后 B2/B3/B4/B6 可一次扫完。
+> **自动化通道(本轮打通,修正此前"该路径成本过高"的结论)**:
+> * `uitest` **可点 Electron 应用内 DOM**(无障碍树里可见 `菜单/关闭标签/保存/AI 总结` 等),
+>   也能点系统弹窗(授权框);**但系统标题栏三键不在树里**——按坐标硬点会误触
+>   "全部标签"按钮(实测踩过)。
+> * 三键坐标:窗口态 `[266,119][2850,1830]` → 最大化 (2636,142) / 最小化 (2722,142) /
+>   关闭 (2797,142);最大化态 `[0,0][3120,1955]` → (2900,35) / (2978,35) / (3055,35)。
+> * 取证首选 `snapshot_display -f`(截图肉眼判读,比 hilog 直观),见命令备忘。
+> * 结构化编辑器(HTML/Markdown)下 `uitest uiInput inputText` 不落字(点中块会弹浮动
+>   工具条),**编辑态脏检查链仍须人工**。
 
 ## 命令备忘
 
@@ -76,13 +103,29 @@
 # 装 + 起
 hdc file send entry/build/default/outputs/default/entry-default-signed.hap /data/local/tmp/go.hap
 hdc shell "bm install -p /data/local/tmp/go.hap && aa start -a EntryAbility -b app.fuqidian.sotaoffice"
+# ⚠ 装机后必须授权,否则应用静默退出(见顶部硬门槛);脚本自动点三次"允许"+重启+核验
+bash scripts/grant-acl.sh 192.168.1.5:44959
 
-# shim 日志(注:hilog 会被 flowcontrol 丢日志,启动期日志常缺;以探针为准)
-hdc shell "hilog -x | grep GO-SHIM"          # -x: 非阻塞 dump 缓冲区后退出
+# shim 日志(首选:直读沙箱物理路径,不受 flowcontrol 影响)
+hdc -t 192.168.1.5:44959 shell "tail -40 /data/app/el2/100/base/app.fuqidian.sotaoffice/files/shim-log.txt"
+# 备选:hilog(-x 为非阻塞 dump 后退出;启动期日志常被流控丢弃)
+hdc shell "hilog -x | grep GO-SHIM"
+
+# 取证截图(比 hilog 直观;拉回本地后直接看图)
+hdc -t 192.168.1.5:44959 shell "snapshot_display -f /data/local/tmp/scr.jpeg"
+hdc -t 192.168.1.5:44959 file recv /data/local/tmp/scr.jpeg /tmp/scr.jpeg
+
+# UI 自动化:先 dump 拿 bounds,再点其中心(系统弹窗与 Electron DOM 都可用)
+hdc -t 192.168.1.5:44959 shell "uitest dumpLayout -p /data/local/tmp/l.json"
+hdc -t 192.168.1.5:44959 file recv /data/local/tmp/l.json /tmp/l.json
+hdc -t 192.168.1.5:44959 shell "uitest uiInput click 1741 1132"
 
 # 探针(shim 桩⑯ 注入 shell 页,CDP 9333 可读):三目录落点/可写性 + 剪贴板授权信号
 node /tmp/probe-info.mjs                     # 打印 window.__GO_INFO__
 
-# 文件关联手测(不依赖文件管理器 UI)
-hdc shell "aa start -a EntryAbility -b app.fuqidian.sotaoffice -U file://docs/storage/Users/currentUser/Desktop/test.docx"
+# 文件关联抽验(六类 + 未知类型回落;脚本内含前提与判据)
+bash scripts/verify-file-assoc.sh 192.168.1.5:44959
 ```
+
+> 文件关联抽验的**前提**:探针文件由 shim 桩⑱ 在应用侧生成(授权完成后冷启动一次即可),
+> hdc 侧一律写不进 `/storage/Users`(命名空间隔离,非权限问题)。
