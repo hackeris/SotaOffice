@@ -19,6 +19,48 @@
 
 ---
 
+## 0.1 D1 落地方案(AI 后端)
+
+**代码现状(决定方案形状)**:
+- `custom` provider 已是**完整的 OpenAI 兼容通道**——`G/packages/ai-provider/src/registry.ts:266-277`:要求 `config.baseUrl`,协议 `openai-compatible`,支持 vision,**写新代码为零**
+- provider 目录已有 15+ 家 BYOK 厂商;genspark 的特殊点是 `auth: 'gsk-login'`(不要 key,靠登录态)与其模型清单是**代理服务端的模型池**(`providers.ts:44-62` 七个名字)
+
+| 路线 | 代码改动 | 用户侧体验 | 成本 |
+|---|---|---|---|
+| **A 纯 BYOK** | 下面 1–6 全做 | 自行填 baseUrl + key + 模型名 | **0** |
+| **B 预置自有网关** | A + 在 `defaultAiSettings()` 预置网关 `baseUrl`/`model` | 开箱即用 | 网关服务器 + 模型 API 费 |
+| **C 混合(推荐)** | B + 保留 BYOK 供高级用户覆盖 | 开箱即用 + 可覆盖 | 同 B |
+
+**统一要做的代码改动**:
+1. `providers.ts:304-323` `defaultAiSettings()`:`provider: 'genspark'` → `'custom'`(B/C 再预置 `baseUrl`/`model`)
+2. `providers.ts:338-356` `activeProvider()`:**删两处 `return 'genspark'` 兜底** → 无有效配置时返回空,UI 提示"未配置模型服务"(这是"静默打向上游"的根)
+3. `providers.ts:42-62` 删 genspark meta(含 7 个代理模型名);`registry.ts:140-155` 删 genspark 适配器
+4. `providers.ts:9-26` 删 `GENSPARK_LLM_BASE_URLS`、`GENSPARK_AGENT_TYPE`、`gensparkAttributionHeaders`
+5. `providers.ts:378-383` 删 `RETIRED_MODELS.genspark` + `AiProviderId` 类型里的 `'genspark'`
+6. 各编辑器 AI 面板的 `gsk-status`/`gsk-login` 门禁 → 改"未配置"提示(见 §1.2 / §2.8)
+
+**网关侧硬要求(B/C 路线)**:
+- **OpenAI 兼容** `/v1/chat/completions`(custom 走 `openai-compatible` 协议)
+- 必须支持:**流式 SSE**、**工具调用 tool call**(AI 面板依赖)、**图片输入 vision**(文档截图/图片分析)
+- 选型:LiteLLM / one-api / new-api 自建聚合,或直接指某家厂商的兼容端点(DeepSeek/通义/豆包等)
+- ⚠ 原实现给 claude 特意走 anthropic 协议**保图片保真**(`registry.ts:146-155`);换 openai 格式后保真度略降
+
+## 0.2 D3 落地方案(搜索 / 生图 / 媒体解析)
+
+**搜索——近乎零成本**(现有结构已是链式降级,只需删上游分支):
+- 现状:`G/packages/ai-search/src/index.ts:136-172` = gsk → Serper(env key) → Tavily(env key) → **DuckDuckGo(匿名、无需 key)**
+- 改动:①删 `:136-151` 的 gsk 分支 ②`search-settings.ts:8-21` 默认 provider 由 `genspark` 改 `serper`(无 key 自动落 DuckDuckGo)
+- 结果:**零后端可用**;有 Serper/Tavily key 的用户自动优先,图片搜索同链(`:176-235`)
+
+**生图 / 媒体解析——取决于 D1**:
+- 现状:`media.ts:20-34` 的 `AI_MEDIA_PROVIDERS` 首项为 genspark;`defaultAiMediaSettings()`(`:175-191`)的 image/analysis/videoAnalysis **三个默认值全是 genspark**
+- 现成 BYOK 通路已就绪:openai / gemini / ark / zhipu / xai / dashscope / minimax(各自带 imageProtocol / analysisProtocol / models)
+- 改动:删 genspark 项;默认值按 D1——①走网关 `custom`(需网关支持 images / vision)②或默认 `openai`/`dashscope` 并提示用户填 key
+
+**工作量**:搜索 0.5 人日;生图/媒体 1–2;D1 主体 2–4(含回退逻辑重写与各面板提示)。
+
+---
+
 ## 1. 账号与身份(阻塞发布)
 
 | # | 项 | 位置 | 动作 |
