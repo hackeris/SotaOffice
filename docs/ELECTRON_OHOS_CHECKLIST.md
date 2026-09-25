@@ -1,12 +1,11 @@
 # Electron on OHOS 基本要素清单(ELECTRON_OHOS_CHECKLIST)
 
-> 状态:**v3(官方侧 + hos_vscodium 实证 + M1 GenOffice 首亮实测修正;POC-0/M1 施工依据)**
-> 日期:2026-09-19
-> 目的:POC-0 一次搭对——按装载链分层列出 Electron-OHOS 应用必需/易漏要素,每要素标注 **必需性 / 位置 / 内容要点 / 缺失症状**。
+> 状态:官方侧 + 真机实证 + 首亮实测修正的要素清单
+> 目的:按装载链分层列出 Electron-on-OHOS 应用的必需与易漏要素,每项标注 **必需性 / 位置 / 内容要点 / 缺失症状**。
 > 来源:
-> - **[官]** openharmony-sig/electron 官方鸿蒙化指导项目(克隆于 `.temp/ohos-sig-electron`,README + docs/)
-> - **[实]** hos_vscodium 真机实证工程(`.temp/hos_vscodium`)
-> - **[推]** 依据机制推断,真机待验
+> - **[官]** openharmony-sig/electron 官方鸿蒙化指导项目(克隆于 `.temp/ohos-sig-electron`)
+> - **[实]** 引擎集成参考源的真机实证(`.temp/engine-ref`)
+> - **[推]** 依据机制推断,未逐条实测
 
 ---
 
@@ -25,7 +24,7 @@
 
 ## 1. 二进制/运行时层(web_engine HAR 内容物)
 
-编译产物 13 件套(官方 copy.sh 清单,**一件都不能少**):
+编译产物清单(官方 copy.sh + 实测补充,**一件都不能少**):
 
 | # | 文件 | 必需性 | 位置 | 缺失症状[推] |
 |---|---|---|---|---|
@@ -33,9 +32,10 @@
 | 2 | `libadapter.so` | **必需** | `libs/arm64-v8a/` | XComponent(libraryname="adapter")找不到库,白屏 |
 | 3 | `libffmpeg.so` | **必需**(音视频编解码) | `libs/arm64-v8a/` | H.264/AAC 等媒体不可用 |
 | 4 | `libc++_shared.so` | **必需** | `libs/arm64-v8a/`(从 NDK `native/llvm/lib/aarch64-linux-ohos` 取) | C++ 运行时缺失,dlopen 失败 |
-| 5 | `electron`(可执行启动器) | **必需**(appspawn fork 的目标) | `resfile/` + `executableBinaryPaths` 注册 | runBrowser 后进程起不来 |
+| 5 | `electron`(可执行启动器) | **必需**(appspawn fork 的目标) | `libs/arm64-v8a/` + `executableBinaryPaths` 注册 | runBrowser 后进程起不来 |
 | 6 | `icudtl.dat` | **必需**(ICU 国际化数据) | `resfile/` | 启动即崩(Unicode 初始化) |
 | 7 | `v8_context_snapshot.bin` | **必需**(V8 启动快照) | `resfile/` | V8 上下文创建失败 |
+| 7b | `snapshot_blob.bin` | **必需**(Node 快照) | `resfile/` | Node 侧初始化失败 |
 | 8 | `resources.pak` | **必需**(Chromium 资源) | `resfile/` | 内置组件/字符串缺失 |
 | 9 | `chrome_100_percent.pak` | **必需**(1x 缩放资源) | `resfile/` | UI 资源缺失 |
 | 10 | `chrome_200_percent.pak` | **按需**(2x 缩放,PC 建议) | `resfile/` | 高 DPI 下 UI 资源退化 |
@@ -52,12 +52,12 @@
 | XComponent `libraryname="adapter"` | **必需** | WebWindow.ets(或等价组件) | XComponent 装载 libadapter.so 的入口 | 窗口白屏,libadapter 未加载 |
 | `nativeContext.runBrowser(argv)` 调用链 | **必需** | XComponent onLoad | 触发 appspawn fork `electron` | 进程树不出现 electron |
 | `--bundle-installation-dir=` 参数 | **必需** | runBrowser argv | 指向 `getContext().resourceDir`,Electron 靠它定位 resfile | Electron 找不到资源目录,启动失败 |
-| `executableBinaryPaths` | **必需**(可执行体系①) | module.json5 module 级 | 注册 `resfile/electron`、`resfile/native/xlsx-sidecar` 等 | **XPM 拦截:exec 报 signature info failed** |
+| `executableBinaryPaths` | **必需**(可执行体系①) | module.json5 module 级 | 注册 `libs/arm64-v8a/{electron,node,xlsx-sidecar}` | **XPM 拦截:exec 报 signature info failed** |
 | deviceTypes | **必需** | module.json5 | `["tablet","2in1"]`(fork web_engine 支持面;无 phone) | 装不上目标设备 |
 | 权限声明 | **必需** | module.json5 `requestPermissions` | 见 §4 | 安装/运行时报权限缺失 |
 | 首窗口尺寸 | 按需 | module.json5 abilities[].metadata | `ohos.ability.window.{width,height,left,top}`(left/top 可 `center`) | 首窗口尺寸不可控(默认值) |
-| `launchType` | **重要** | module.json5 abilities[] | 多实例控制(见 §5 单实例断点) | 与 JS 侧单实例逻辑不一致 |
-| `multiAppMode` 配置 | **多窗口时必须** | AppScope/app.json5 | `multiAppModeType:"multiInstance", maxCount:10`;与 entry `launchType:"specified"` + WebAbilityStage.onAcceptWant **三件套配套**(缺任一环第二窗口开不出);不用多实例则全删,否则**上架审核被拒** | 新窗口复用同一实例/互相覆盖 |
+| `launchType` | **重要** | module.json5 abilities[] | 单/多实例语义:EntryAbility 用 `singleton`(应用本身按单实例设计,热启动走 onNewWant);StatelessAbility 等仍为 `multiton` | 与 JS 侧单实例逻辑不一致 |
+| `multiAppMode` 配置 | **不用则全删** | AppScope/app.json5 | API 26 上 `specified` 启动被系统拒绝(`Not support multi-instance`),该声明不被承认,**所以本工程不声明它** | 声明了反而**上架审核被拒** |
 | `nativeLib.collectAllLibs: true` | **必须** | **entry** 的 `build-profile.json5` buildOptionSet(debug+release 都要) | 把依赖 HAR(web_engine)`libs/arm64-v8a` 的全部 so 收进 entry HAP(entry 代码不直接链接也要)——**[实]漏掉 = HAP 里没有 libelectron/libadapter/libffmpeg,安装成功但 XComponent load "adapter" 失败 → 白屏** |
 | `extractNativeLibs: true` | **必须** | entry module.json5 | 安装时把 so 解出为真实文件到 `/data/storage/el1/bundle/libs/arm64/`(dlopen 绝对路径、exec、XPM 校验都依赖) | [实]`/data/storage/el1/bundle/libs/arm64/*` 不存在 → dlopen 失败 → 白屏/闪退 |
 | `compressNativeLibs: false` | **必须** | entry module.json5 | HAP 内 so 不压缩(保证 mmap + 省安装解压) | 安装缓慢/装载异常 |
@@ -73,54 +73,41 @@
 | 要素 | 必需性 | 位置 | 内容要点 | 缺失症状 |
 |---|---|---|---|---|
 | `package.json` 的 `main` | **必需** | `resources/app/package.json` | ElectronMain 载入入口(GenOffice:main-shim.mjs);**必须是解包目录,不是 asar**([实]fork 对 resfile 下 asar 支持差) | 启动失败:找不到 main |
-| main-shim 六件事 | **必需(每件独立致命)** | main-shim.mjs | **[实]VSCodium 实证版**:① `process.platform→'linux'` ② `process.title` getter/setter 打桩(OHOS 无 setproctitle) ③ HOME/XDG/TMPDIR/SHELL/PATH 环境改造 + argv.json(含 `disable-chromium-sandbox`)+ chdir(el2/files,子进程只能 chdir 到 /data/storage 下) ④ powerMonitor 订阅吞异常(fork 缺 setListeningForShutdown,订阅即 abort) ⑤ WCO 三 API 打桩(setTitleBarOverlay/setWindowButtonVisibility/setWindowButtonPosition)+ 窗口控制 ipcMain ⑥ 主进程原生模块预加载(**VM 销毁后首次 dlopen .node 即 ecma_vm destructed abort**;GenOffice 零 napi 预计不需要,真机确认) + shim-log 落盘;**GenOffice M1 实装版(十桩,含 isPackaged/documents 降级/sidecar spawn 重映射)以 `scripts/shim/main-shim.mjs` 为准,清单见 PORT_DESIGN §11.3** | ①缺→启动即静默退出;③缺 disable-chromium-sandbox→沙箱初始化失败白屏;④缺→订阅 powerMonitor 时 native abort;⑥缺→"打开某功能几秒后闪退" |
+| main-shim 六件事 | **必需(每件独立致命)** | main-shim.mjs | **[实]VSCodium 实证版**:① `process.platform→'linux'` ② `process.title` getter/setter 打桩(OHOS 无 setproctitle) ③ HOME/XDG/TMPDIR/SHELL/PATH 环境改造 + argv.json(含 `disable-chromium-sandbox`)+ chdir(el2/files,子进程只能 chdir 到 /data/storage 下) ④ powerMonitor 订阅吞异常(fork 缺 setListeningForShutdown,订阅即 abort) ⑤ WCO 三 API 打桩(setTitleBarOverlay/setWindowButtonVisibility/setWindowButtonPosition)+ 窗口控制 ipcMain ⑥ 主进程原生模块预加载(**VM 销毁后首次 dlopen .node 即 ecma_vm destructed abort**;GenOffice 零 napi 预计不需要,真机确认) + shim-log 落盘;**本工程实装版(17 个编号桩,含 isPackaged/documents 降级/sidecar spawn 重映射)以 `scripts/shim/main-shim.mjs` 为准,清单见 `SHIM_INTERNALS.md`** | ①缺→启动即静默退出;③缺 disable-chromium-sandbox→沙箱初始化失败白屏;④缺→订阅 powerMonitor 时 native abort;⑥缺→"打开某功能几秒后闪退" |
 | shim-log.txt | **必需(排障命脉)** | main-shim 写 `/data/storage/el2/base/files/shim-log.txt` | 六件事逐步打点 + out/main.js loaded/FAILED | 启动失败完全黑盒 |
 | `--user-data-dir` | **必需**(默认已合理) | fork CommandLineAdapter 默认 argv | `/data/storage/el2/base/files/`(el2 用户数据区);**[实]默认 argv 全套:`--use-gl=egl --enable-features=UseOzonePlatform --ozone-platform=ohos --enable-logging --no-zygote --force-renderer-accessibility=basic --disable-gpu-watchdog --disable-features=EnableDrDc`** | `--ozone-platform=ohos` 缺→Surface 对接失败黑屏;user-data-dir 缺→写不出沙箱即崩 |
 | `--bundle-installation-dir` | **必需** | WebWindow XComponent onLoad 注入 | 值=`getContext().resourceDir`(HAR resfile 合并后的运行期目录),pak/icudtl/snapshot/locales 全靠它定位 | [实]libelectron 资源初始化失败,启动崩溃 |
 | 托盘 Tray | **条件必需** | 应用 main | **[官]OH 限制:窗口显示/隐藏与托盘强绑定,启动前需先建 Tray**;否则改 `AppWindowAdapter.ets` 注释 `processMode`/`startupVisibility` | 窗口 hide/show 行为异常/不显示 |
 | 命令行参数注入 | 调试期必需 | `web_engine/.../CommandLineAdapter.ets` | appendSwitch 入口(官方 README 写 WebWindow.ets/CommandLineAdapter 两处,以 fork 实际代码为准) | 参数不生效 |
-| 窗口三键(关闭/最小化/最大化) | **注意** | WebAbility.ets 初始状态 | frame:true 显示三键;frameless 无三键(想显示需改 WebAbility 初始状态) | frameless 窗口无系统三键(WCO 打桩的根因) |
+| 窗口三键(关闭/最小化/最大化) | **注意** | entry EntryAbility | 方案是**保留系统三键 + 隐藏标题栏**:`setWindowDecorVisible(false)` + `setWindowDecorHeight(40)`。注意 Chromium 创建平台窗口时会重置装饰,须在其后重设(见 `PORT_DESIGN.md` §6.1) | 无边框窗口没有鼠标可达的关闭入口(WCO 打桩的根因) |
 | 编译产物放置 | **必需** | `resources/app/` | **鸿蒙无编译环境,必须放编译好的 JS 产物**(不能放 TS);[实]node_modules 保留解包目录 + 放一个 28 字节空壳 `node_modules.asar`(`{"files":{}}`)防加载器误判 | — |
-| **主 bundle 模块形态(M1 实测)** | **必需** | app/package.json | **[M1]electron-vite 主 bundle 是 CJS——app package.json 禁带 `"type":"module"`**(否则 ESM 语境解析 → `exports is not defined` → 启动即退);shim 加载 bundle 用 **createRequire** 勿用 dynamic import;.mjs 后缀的 shim 自身不受包级 type 影响 | 启动即退,日志 "The browser process has exited"(参考 PORT_DESIGN §11.4 真凶#1) |
+| **主 bundle 模块形态(M1 实测)** | **必需** | app/package.json | **[M1]electron-vite 主 bundle 是 CJS——app package.json 禁带 `"type":"module"`**(否则 ESM 语境解析 → `exports is not defined` → 启动即退);shim 加载 bundle 用 **createRequire** 勿用 dynamic import;.mjs 后缀的 shim 自身不受包级 type 影响 | 启动即退,日志 "The browser process has exited"(参考 `PITFALLS.md`「主进程 bundle 被当成 ESM 解析」) |
 | shim 排障法(M1 沉淀) | **调试期必需** | main-shim.mjs | **uncaughtException handler 先行 + 文件日志为准(shim-log 双写 el2 文件+console)**——退出时 console 缓冲丢失会造成"死在某桩"假象误导二分;卡死时零桩直载 bundle 二分定位;`process.resourcesPath` fork 天然正确勿 defineProperty(native 异常风险) | 打点"死在桩上"多为假象,真凶在更后面 |
 
 ---
 
 ## 4. 签名/权限层
 
-### 4.1 调试签名(POC 阶段)
+### 4.1 签名
 
-- 调试证书与 bundleName 强绑定:**终态包名 `app.fuqidian.sotaoffice` 的 ACL profile 申请中**(到位前构建产 unsigned HAP);借名调试期曾用 MagicFlow 档(详见 `docs/M1_ACCEPTANCE.md` §4);
+- 调试证书与 bundleName 强绑定,现用 `app.fuqidian.sotaoffice` 名下的 SotaOffice 档(ACL 五件齐);签名材料从 `scripts/.signing.snippet` 注入,缺了自动降级产 unsigned HAP。详见 `PERMISSIONS_ACL.md`;
 - **[官] 未申请到 ACL 证书时,可暂时注释 ACL 权限再签名**(HAP 能装,功能受限)。
 
-### 4.2 权限三档(官方 module.json5 全集 × GenOffice 裁剪)
+### 4.2 权限清单
 
-**基础权限(system_grant,fork web_engine 自带,勿删)**:
+当前声明 **12 条**(`requestPermissions`)+ 2 条 `definePermissions`,唯一事实源是 `web_engine/src/main/module.json5`。**完整清单与申请状态以 `PERMISSIONS_ACL.md` 为准**,本节只列装载侧的要点。
 
-| 权限 | 用途 | GenOffice |
+| 层 | 权限 | 用途 |
 |---|---|---|
-| `ohos.permission.INTERNET` | 网络(AI 面板必需) | 保留 |
-| `ohos.permission.GET_NETWORK_INFO` | 网络状态 | 保留 |
-| `ohos.permission.RUNNING_LOCK` | 后台长转换防休眠 | 保留 |
-| `ohos.permission.PREPARE_APP_TERMINATE` | 退出前清理(杀 sidecar) | 保留 |
-| `ohos.permission.FILE_ACCESS_PERSIST` | 文件 Uri 持久化授权 | 保留 |
-| `ohos.permission.READ_PASTEBOARD` | 剪贴板读取 | 保留 |
+| **Electron 运行时** | kernel ACL `ALLOW_WRITABLE_CODE_MEMORY` | V8 JIT 的 W^X 内存页(唯一 kernel ACL) |
+| **system_grant** | `INTERNET` / `GET_NETWORK_INFO` / `RUNNING_LOCK` / `PREPARE_APP_TERMINATE` / `FILE_ACCESS_PERSIST` / `GET_FILE_ICON` / `PRINT` | 网络 / 后台长转换防休眠 / 退出前清理(杀 sidecar) / Uri 持久化 / Home 图标 / 打印 |
+| **ACL(user_grant)** | `READ_PASTEBOARD` + `READ_WRITE_{DOCUMENTS,DOWNLOAD,DESKTOP}_DIRECTORY` | 剪贴板读取 + 三目录直读 |
 
-**ACL 权限(需申请;申请不到可注释先跑)**:
+> **user_grant 的关键**:声明 + profile 覆盖只给"申请资格",还须在窗口就绪后走 `requestPermissionsFromUser`。
+> 只声明不申请时,写用户目录会 EPERM;**没授权时渲染进程根本不会创建,应用走 `window-all-closed` 退出**
+> (退出码 0、无异常,看着像崩溃)。`build-ohos.sh` 会校验必需声明齐全并拦截未获批权限出现。
 
-| 权限 | 用途 | GenOffice |
-|---|---|---|
-| `ohos.permission.SYSTEM_FLOAT_WINDOW` | 全局悬浮窗 | **M1 不需要**(GenOffice 无浮窗) |
-| `ohos.permission.PRINT` | 打印框架 | 需要(printToPDF 相关) |
-| `ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY` | 公共 Download 读写 | 需要(打开/保存) |
-| `ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY` | 公共 Documents 读写 | 需要 |
-| `ohos.permission.READ_WRITE_DESKTOP_DIRECTORY` | 公共 Desktop 读写 | 按需 |
-| `ohos.permission.WINDOW_TOPMOST` | 窗口置顶 | 不需要 |
-| `ohos.permission.PRIVACY_WINDOW` | 防截屏 | 不需要 |
-| `ohos.permission.ACCESS_CERT_MANAGER` | 证书管理 | 不需要 |
-| kernel ACL: `ALLOW_WRITABLE_CODE_MEMORY` | V8 JIT W^X | **必需,已确认可得**(调试证书 5.0.3+ 原生支持) |
-
-**裁剪(VSCodium 特有,GenOffice 全删)**:ACCESS_BIOMETRIC、LOCATION×3、MICROPHONE、CAMERA、ACCESS_BLUETOOTH、CUSTOM_SCREEN_CAPTURE。
+**永久裁剪(不申请)**:`CUSTOM_SANDBOX` / `ALLOW_EXTERNAL_NATIVE_CODE` / `WEB_NATIVE_MESSAGING` / `READ_WRITE_USER_FILE` / `ACCESS_USER_FULL_DISK`,以及浮窗·置顶·隐私窗·cert·传感器·相机·定位·蓝牙全家。
 
 ### 4.3 上架注意
 
@@ -132,7 +119,7 @@
 ## 5. API 支持面交叉验证(官方 1294 API 矩阵 × GenOffice 使用面)
 
 > 数据源:官方 docs/api/index.md(66 模块 1294 API:支持 998 / 不支持 296)。
-> 对 POC-2"静态零断点"的**运行时 API 面补充核对**。
+> 官方矩阵与 GenOffice 实际使用面的逐条核对。
 
 ### 5.1 GenOffice 关键依赖 → 全部支持 ✅
 
@@ -141,23 +128,23 @@
 | `ipcMain.handle` / `handleOnce` | ✅ |
 | `protocol.handle` / `registerSchemesAsPrivileged` / `registerFileProtocol` | ✅(4 scheme 可用) |
 | `dialog.showOpenDialog/SaveDialog`(+Sync) | ✅ |
-| `contents.printToPDF` | ✅(POC-7 仍需真机行为验证) |
+| `contents.printToPDF` | ✅(真机已验证,M1 用例 `docs-export-pdf`) |
 | `new WebContentsView` + `view.webContents` | ✅ |
 | `utilityProcess.fork` | ✅ |
 | `win.capturePage` | ✅ |
 | `Menu.buildFromTemplate` | ✅ |
 | clipboard 核心(`readText/writeText/readImage/writeImage/read/write/readBuffer/writeBuffer/has/availableFormats`) | ✅ |
 | `app.getPath` | ✅ |
-| `--remote-debugging-port` / `--inspect` | ✅ 无差异(POC-3 e2e 通道保留) |
+| `--remote-debugging-port` / `--inspect` | ✅ 无差异(e2e 通道靠它) |
 
 ### 5.2 不支持 → GenOffice 实际使用点与对策
 
 | API | 状态 | GenOffice 使用点 | 对策 |
 |---|---|---|---|
 | `app.requestSingleInstanceLock` + `second-instance` | ❌ | shell/docs/slides 主进程 + cli open(4 处) | **main-shim 打桩:恒返回 true**(OHOS 侧单实例由 module.json5 `launchType` 管;`second-instance` 用 deeplink/module.json5 skills 替代路由) |
-| `win.setTitleBarOverlay`(WCO 动态样式) | ❌ | shell/docs/slides 主进程(titleBarOverlay) | 已在 MIGRATION_ISSUES L 层:frameless 无三键,样式打桩 no-op |
-| `app.setAsDefaultProtocolClient` | ❌ | (文件关联/deeplink 相关) | 用 module.json5 skills(uris.scheme)声明,官方 deeplink 方案;**[实]文件打开走 EntryAbility skills 32 种 UTD FileOpen + onNewWant(kNewWindow/kOpenURL)** |
-| 系统打印对话框(PrintAdapter) | ⚠️ **半成品** | web_engine PrintAdapter.ets:39 `TODO: need adapter print file` | **[实]fork 的系统打印适配有 TODO 未完成**;但 `webContents.printToPDF`(纯 Chromium 管线)官方标支持——GenOffice 导出 PDF 不受影响,调系统打印机的"打印"功能 M1 验证降级 | 打印静默失效 |
+| `win.setTitleBarOverlay`(WCO 动态样式) | ❌ | shell/docs/slides 主进程(titleBarOverlay) | 样式打桩 no-op;窗口按钮改用系统装饰方案,见 `PORT_DESIGN.md` §6.1 |
+| `app.setAsDefaultProtocolClient` | ❌ | (文件关联/deeplink 相关) | 用 module.json5 skills(uris.scheme)声明;文件打开走 **6 类 UTD FileOpen** + onNewWant → 信号文件 → control.sock,见 `PORT_DESIGN.md` §6.3 |
+| 系统打印对话框(PrintAdapter) | ⚠️ **半成品** | web_engine PrintAdapter.ets:39 `TODO: need adapter print file` | **[实]fork 的系统打印适配有 TODO 未完成**:`webContents.print()` 回调正常触发但恒失败,降级方案(拦截 print 改走 `printToPDF`)见 `OPEN_ITEMS.md`。`webContents.printToPDF`(纯 Chromium 管线)不受影响 | 点"打印"静默失败(导出 PDF 正常) |
 | `app.setAppUserModelId` | ❌ | (Windows 任务栏专用) | 无影响,shim no-op |
 | `clipboard.clear/readRTF/writeRTF/readBookmark/writeBookmark/readFindText/writeFindText` | ❌ | **零使用** | 无影响 |
 | `--disable-renderer-backgrounding` | ❌ | (后台渲染优先级) | OHOS 强制能效模式,不可绕;长转换用 RUNNING_LOCK |
@@ -172,7 +159,7 @@
 
 ---
 
-## 6. 子进程/可执行文件调用(POC-4 落地路径)
+## 6. 子进程/可执行文件调用
 
 | 方案 | 机制 | 优点 | 缺点 | 采用 |
 |---|---|---|---|---|
@@ -180,7 +167,7 @@
 | ② HNP 包 | `hnp/hnp.json` + hnpcli 打包 + module.json5 `hnpPackages` + **手改 DevEco hvigor 插件 JS 两处**(packing-tool-options.js / base-pack-hap-task.js) | 官方指导项目路线,环境变量自动入 PATH(HNP_PUBLIC_HOME/HNP_PRIVATE_HOME),软链接可执行名 | 需 hack DevEco 打包流水线,版本升级易碎 | 备选 |
 | ③ 关 XPM(仅调试) | `echo 0 > /proc/sys/kernel/xpm/xpm_mode` | 零配置 | root + 全系统安全面下降,**不可用于交付** | 仅排障对照 |
 
-fork/`ELECTRON_RUN_AS_NODE`(官方:fork 需 electron 二进制可执行,即方案①或②先就位)、`spawn`(xlsx-sidecar)同源:GenOffice 的 sidecar 静态二进制放 `resfile/native/` + executableBinaryPaths 注册即可。
+fork/`ELECTRON_RUN_AS_NODE`(官方:fork 需 electron 二进制可执行,即方案①或②先就位)、`spawn`(xlsx-sidecar)同源:GenOffice 的 sidecar 放 `entry/libs/arm64-v8a/`(运行期是 `libs/arm64/`)+ `executableBinaryPaths` 注册。它是交叉编译出的 aarch64-ohos **动态链接** ELF(`interpreter /lib/ld-musl-aarch64.so.1`);shim 里 spawn 的 argv[0] 也要按运行期路径重映射。
 
 ---
 
@@ -191,7 +178,7 @@ fork/`ELECTRON_RUN_AS_NODE`(官方:fork 需 electron 二进制可执行,即方�
 | 渲染进程调试 | `webContents.openDevTools()`(正常可用) |
 | 主进程调试 | `--inspect=9229` 加入 vec_args → `hdc fport tcp:9229 tcp:9229` → PC Chrome `chrome://inspect` |
 | e2e 通道 | **[实]无需改代码:libadapter.so 硬编码读 `/data/storage/el1/bundle/libs/arm64/dev_config.json`,内容 `{"remote-debugging":true,"remote-debugging-port":9333}` 即开 9333**(文件缺失=关闭,无碍运行;**必须放 entry libs,放 resfile 无效**)→ `hdc fport tcp:9333 tcp:9333` → Playwright connectOverCDP |
-| crash-hook | [实]SIGSEGV/ABRT/ILL/BUS/FPE altstack handler 写 `/data/storage/el2/base/files/crash-hook.txt`(寄存器 + 48 帧回溯);源码 `hos_vscodium/native/src/crash-hook.c`,GenOffice 可搬 |
+| crash-hook | [实]SIGSEGV/ABRT/ILL/BUS/FPE altstack handler 写 `/data/storage/el2/base/files/crash-hook.txt`(寄存器 + 48 帧回溯);源码在参考源 `.temp/engine-ref/native/src/`,**当前决定不搬入**(遇 fork 崩溃无栈时再加) |
 | hilog 定位 | 包名搜 `APPSPAWN` 找主进程 pid;`<pid>.+Child process started.+pid` 找子进程(GPU/Renderer/Utility);框架日志三分:Adapter / WebEngine / Chromium;TAG `[WebEngine]`/`WebAbility` |
 | 沙箱路径自查 | `nsenter -t <pid> -m sh` 进入进程 mount ns 看真实路径 |
 | 用户数据 | `/data/storage/el2/base/files`(系统文件管理器可见) |
@@ -207,7 +194,7 @@ fork/`ELECTRON_RUN_AS_NODE`(官方:fork 需 electron 二进制可执行,即方�
 - 全面禁用 JIT(含已获 ACL 权限的应用);
 - 暂停 WebAssembly 支持(wasm 依赖 JIT)。
 
-**对 GenOffice 的影响**:pdfium.wasm / harfbuzz.wasm / hb-subset.wasm 三件套在坚盾模式下**不可用** → PDF 管线整条失效。应对:
+**对本应用的影响**:`pdfium.wasm` / `hb-subset.wasm` 在坚盾模式下**不可用** → PDF 管线整条失效。应对:
 1. M1 检测降级路径(检测 wasm 初始化失败 → 提示"坚盾模式下 PDF 功能受限");
 2. 长期:评估 pdfium 原生 .so 化(走 HAP so 体系,不受 JIT 限制)——列为 M2 评估项。
 
@@ -233,30 +220,30 @@ fork/`ELECTRON_RUN_AS_NODE`(官方:fork 需 electron 二进制可执行,即方�
 }
 ```
 
-M1 决策点:手工脚本(现状 scripts/build-ohos.sh,可控)vs electron-builder-ohos(官方、Electron 工程直出 HAP、原生模块/权限/skills 一体化)。倾向:POC 阶段手工,上架前切 electron-builder。
+**当前用的是手工脚本链**——`scripts/sync-engine.sh` → `build-genoffice.sh` → `build-ohos.sh`,步骤全在仓里、可复现。`electron-builder-ohos` 是官方路线(Electron 工程直出 HAP、权限与 skills 一体化),上架前可评估。
 
 ---
 
-## 10. POC-0 落地检查单(按本文档浓缩,依[实]证核对顺序排序)
+## 10. 落地核对单
 
-按失败代价从高到低([实]agent 核对顺序):
+按失败代价从高到低排序——搭同类工程时按这个顺序核对。**本工程这些项均已落实。**
 
-- [ ] **① entry build-profile:`nativeLib.collectAllLibs:true`**(debug+release 两个 buildOptionSet 都要)——漏=白屏
-- [ ] **② entry module.json5:`executableBinaryPaths`(electron 启动器、后续 xlsx-sidecar)+ `extractNativeLibs:true` + `compressNativeLibs:false`**
-- [ ] **③ 权限:kernel.ALLOW_WRITABLE_CODE_MEMORY(ACL 签名 profile 必须带)+ 引擎 requestPermissions**(从 web_engine HAR 裁剪)
-- [ ] **④ web_engine HAR:libs 三件套 + resfile 全量资源进 HAP**(collectAllLibs 只管 libs,resfile 靠 HAR 依赖自动合并)
-- [ ] **⑤ 继承链:MyAbilityStage extends WebAbilityStage + EntryAbility extends WebAbility + CustomChildProcess extends WebChildProcess;pages/Index 顶层 `CustomChildProcess.toString()`**
-- [ ] **⑥ main_pages.json 页全注册 + ability 命名(EntryAbility/StatelessAbility/TaskManagerAbility)**
-- [ ] **⑦ resfile/resources/app/:package.json(main=main-shim.mjs;禁带 type:module,见 §3)+ shim 六件事 + shim-log**
-- [ ] ⑧ Tray 或 AppWindowAdapter 注释(二选一,窗口显示策略)
-- [ ] ⑨ 多窗口三件套:multiAppMode + launchType specified + onAcceptWant(GenOffice 多标签需要)
-- [ ] ⑩ dev_config.json 放 entry libs(9333 e2e 通道)+ crash-hook 搬入
-- [ ] ⑪ 签名:MagicFlow 调试证书 + kernel ACL(或注释 ACL 权限先跑);覆盖安装报 9568332 先 bm uninstall
-- [ ] ⑫ 崩溃时:hilog 按包名/APPSPAWN 定位 + 坚盾模式确认关闭
+- [x] **① entry build-profile:`nativeLib.collectAllLibs:true`**(debug+release 两个 buildOptionSet 都要)——漏=白屏
+- [x] **② entry module.json5:`executableBinaryPaths`(electron/node/xlsx-sidecar)+ `extractNativeLibs:true` + `compressNativeLibs:false`**
+- [x] **③ 权限:kernel.ALLOW_WRITABLE_CODE_MEMORY(签名 profile 必须带)+ 引擎 requestPermissions**
+- [x] **④ web_engine HAR:libs 三件套 + resfile 全量资源进 HAP**(collectAllLibs 只管 libs,resfile 靠 HAR 依赖自动合并)
+- [x] **⑤ 继承链:MyAbilityStage extends WebAbilityStage + EntryAbility extends WebAbility + CustomChildProcess extends WebChildProcess;pages/Index 顶层 `CustomChildProcess.toString()`**
+- [x] **⑥ main_pages.json 页全注册 + ability 命名(EntryAbility/StatelessAbility/TaskManagerAbility)**
+- [x] **⑦ resfile/resources/app/:package.json(main=main-shim.mjs;禁带 type:module,见 §3)+ shim 全部桩 + shim-log**
+- [ ] ⑧ Tray 或 AppWindowAdapter 注释(二选一,窗口显示策略)——本应用没有 Tray,不打桩
+- [x] ⑨ 单实例:`EntryAbility.launchType = "singleton"` + `onNewWant` 热启动链
+- [x] ⑩ `dev_config.json` 放 entry libs(9333 e2e 通道)
+- [x] ⑪ 签名:`scripts/.signing.snippet` 注入材料 + kernel ACL;覆盖安装报 9568332 先 `bm uninstall`
+- [x] ⑫ 崩溃时:hilog 按包名/APPSPAWN 定位 + 坚盾模式确认关闭
 
 ---
 
-## 11. GenOffice 适用性筛除([实]清单中不适用/待定项)
+## 11. GenOffice 适用性筛除(清单中不适用的项)
 
 hos_vscodium 清单中以下要素 **GenOffice 不需要**(零 napi/零 CLI 工具),筛除依据:
 
@@ -265,14 +252,12 @@ hos_vscodium 清单中以下要素 **GenOffice 不需要**(零 napi/零 CLI 工�
 | `bin/{bash,zsh,rg}` + executableBinaryPaths 注册 | 集成终端/全文搜索 | **不需要**(无终端);未来 MCP/CLI 生态(M3)再补 |
 | `.node`→`.so` 别名双胞胎(8 组) | 原生模块过 XPM | **不需要**(零 napi 模块) |
 | napi-dyn 转发层(libelectron RTLD_LOCAL dlsym 桥) | 自编 .node 链接 napi 符号 | **不需要**;若 M2 做 pdfium 原生化,重编 .node 时**必须**走此方案(方法描述符 `napi_default_method`) |
-| `node` 启动器(ELECTRON_RUN_AS_NODE) | 扩展宿主/utilityProcess | GenOffice utilityProcess.fork 支持——**待真机确认是否需要 node 启动器**(fork 拉起 electron --run-as-node 链) |
+| `node` 启动器(ELECTRON_RUN_AS_NODE) | 扩展宿主/utilityProcess | **已采用**,注册在 `libs/arm64-v8a/node`(为 utilityProcess/MCP 生态预留) |
 | extensions/ohos-terminal、product.json/policies | VS Code 特有 | 不需要 |
 | 蹭系统白名单包名(com.huawei.codearts.agent) | CodeArts 覆盖 | 不适用(用 `app.fuqidian.sotaoffice`) |
 
-**待定项**(POC-0/3 真机定):
-- argv.json `disable-chromium-sandbox:true` 是否 GenOffice 也需要(VSCodium 因 Chromium 沙箱初始化失败而禁——fork 的沙箱路径布局靠 CUSTOM_SANDBOX 权限,需实测开了权限后能否不禁);
-- `--force-renderer-accessibility=basic`、`--disable-gpu-watchdog` 等默认 argv 逐项必要性;
-- Vulkan SwiftShader ICD 有 json 无 so([实]H12 软渲染缺口)——PC 真机走 egl 正常,若遇 GPU 异常机器注意此缺口。
+沙箱走 `app.commandLine.appendSwitch('disable-renderer-sandbox')`(shim 桩⑤b,须在 app ready 之前),不用 argv.json;
+Vulkan SwiftShader ICD 有 json 无 so([实]H12 软渲染缺口)——PC 真机走 egl 正常,若遇 GPU 异常机器注意此缺口。
 
 ---
 
@@ -286,7 +271,7 @@ hvigor 构建
   └─ executableBinaryPaths → 注册可执行位(electron 启动器等)
 启动期
   AbilityStage(entry 继承 WebAbilityStage)
-    └─ initNativeContext(kMainProcess) + inversify 容器 + 43 个 adapter JSBind 注册 + SetContextPaths
+    └─ initNativeContext(kMainProcess) + inversify 容器 + 38 个 adapter JSBind 注册 + SetContextPaths
   EntryAbility(继承 WebAbility)loadContent pages/Index
     └─ WebWindow 的 XComponent(libraryname="adapter", type=SURFACE) onLoad
         ├─ appendSwitch('bundle-installation-dir', resourceDir)
@@ -325,4 +310,4 @@ renderer 子进程链(每窗口)
 | H12 | Vulkan SwiftShader ICD 有 json 无 so | 需软渲染的机器黑屏(PC 真机走 egl 未见问题) |
 | H13 | locales 只带 en-US/zh-CN | 其他系统语言缺 Chromium UI 字符串 |
 | H14 | build-variants.sh 引用的 save-signing.sh 仓库中不存在 | 照抄流程会断;GenOffice 不抄此脚本 |
-| H15 | user_grant usedScene 的 "FormAbility" 是占位名(模块里无此 Ability) | 照抄能过打包,勿"修正"成真实名 |
+| H15 | ~~user_grant usedScene 用占位 Ability 名~~ | 已修:本工程的 `usedScene.abilities` 统一用 `EntryAbility` |

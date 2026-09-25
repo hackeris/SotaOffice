@@ -1,6 +1,6 @@
-# M2 真机回归清单(sotaoffice profile 到位后执行)
+# M2 真机回归清单
 
-> 前置:新 profile(p7b)写入 `scripts/.signing.snippet`(材料路径+口令)→ `npm run build:ohos` → 装机(报 9568332 先 `bm uninstall`)
+> 前置:签名材料在 `scripts/.signing.snippet`(材料路径+口令)→ `npm run build:ohos` → 装机(报 9568332 先 `bm uninstall`)
 > 判据:每条给**命令/操作 + 期望**。
 > **shim 日志直读通道(2026-09-24 发现,首选)**:沙箱的**物理路径** hdc 可读——
 > `hdc -t <dev> shell "tail -40 /data/app/el2/100/base/app.fuqidian.sotaoffice/files/shim-log.txt"`
@@ -28,18 +28,18 @@
 
 > A2 若未弹框:检查 trim 声明与 profile ACL 是否覆盖 READ_PASTEBOARD(两门槛闭环,见 `M1_ACCEPTANCE.md` §4.1)。
 
-## B. 文件关联(本轮新增,待验路径)
+## B. 文件关联
 
 | # | 项 | 操作 | 期望 | 实测(09-24) |
 |---|---|---|---|---|
 | B1 | 关联注册 | 文件管理器长按 .docx → 打开方式 | 列表含 GenOffice | 待人工 |
 | B2 | argv 链路 | 双击 .docx 启动 | 文档打开 | ✓ 冷启动通 |
 | B3 | 文档真打开 | 同上,看 UI | 进 docs 模块并渲染该文档 | ✓ target 标题=文件名 |
-| B4 | 六类抽验 | xlsx / pptx / pdf / md / html | 各进对应模块 | docx ✓ 余待测 |
-| B5 | 未知类型 | 双击 .txt | 回落 Home(不崩) | 待测 |
+| B4 | 六类抽验 | xlsx / pptx / pdf / md / html | 各进对应模块 | ✓ 六类全过 |
+| B5 | 未知类型 | 双击 .txt | 回落 Home(不崩) | ✓ 明确回执不崩 |
 | B6 | **热启动** | 应用运行时再开文件 | — | ✅ 已修:连续六次 `aa start -U` 均开新 tab 并渲染(见下方实测记录) |
 
-> B3 是**关键不确定点**:want.uri 的临时授权 × 三目录 ACL 能否让 Chromium 以 POSIX 路径读到文件。
+> B3 曾是关键不确定点(want.uri 的临时授权 × 三目录 ACL 能否让 Chromium 以 POSIX 路径读到文件)——**已确证可行**:三目录 ACL + 系统对 want.uri 的授权叠加,路径可读性无问题。
 
 ## C. 窗口装饰(本轮改动回归)
 
@@ -51,7 +51,9 @@
 | C4 | 高度对齐 | 目视 | 三键中心与 tab 条中心重合 |
 | C5 | 应用图标 | 桌面/最近任务 | 黑底白 G 的 GenOffice 图标(非系统默认蓝) |
 
-## D. 待确立基线(先拿事实,再定方案)
+## D. 基线事实(先拿事实,再定方案)
+
+D1/D2/D4 已取到事实(见下方实测记录),**剩 D3 触屏待人工**。
 
 | # | 项 | 操作 | 目的 |
 |---|---|---|---|
@@ -82,7 +84,7 @@
 | C2 避让 | ✅ | spacer=140px;窗口态与最大化态均与系统三键不重叠(截图) |
 | C3 避让自愈 | ✅ | 最大化↔还原全程 spacer 恒 140px(系统容器不变,无需修正) |
 | C5 应用图标 | 待目视 | — |
-| **D1 打印真实行为** | ❌ **不可用(静默取消)** | 传合法 `WorkbookExportPdfRequest` 调 `printWorkbook` → `{ok:false}`(无 error 字段)。对照 `sheets/pdf-export.ts:88-92`,**无 error 的 `{ok:false}` 只对应 `failureReason==='Print job canceled'`** → fork 的 `webContents.print()` **回调正常触发但恒失败**(未对接系统打印服务)。**降级方案据此定案:shim 拦截 print → printToPDF** |
+| **D1 打印真实行为** | ❌ **不可用(静默取消)** | 传合法 `WorkbookExportPdfRequest` 调 `printWorkbook` → `{ok:false}`(无 error 字段)。对照 `sheets/pdf-export.ts:88-92`,**无 error 的 `{ok:false}` 只对应 `failureReason==='Print job canceled'`** → fork 的 `webContents.print()` **回调正常触发但恒失败**(未对接系统打印服务)。**降级方案据此定案:shim 拦截 print → printToPDF**(尚未落地,见 `OPEN_ITEMS.md`) |
 | **D2 设备能力上报** | ❌ **全空** | `hover/anyHover/pointer:fine/pointer:coarse/any-pointer:coarse` **全 false**,`maxTouchPoints: **0**`,`ontouchstart: false`;而 UA 自称 `(OHOS; PC; OpenHarmony 7.0.0; MOR-M1)`。⚠ **`pointer: fine` 与 `coarse` 双 false** 是最差组合:任何依赖这些媒体查询的 CSS 分支都会落空 |
 | D3 触屏 | 待人工 | 受 D2 全空影响,触屏行为需实测 |
 | D4 崩溃治理 | ✅ | 多轮冷/热启动 + 六模块切换,无 SIGSEGV/SIGABRT/CPP_CRASH/FaultLogger |

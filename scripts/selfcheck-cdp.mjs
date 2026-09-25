@@ -4,7 +4,7 @@
 // 正确目录:仓根(ws 依赖从本仓根 package.json 解析)
 // 前提:    真机已装自检 HAP 并启动;hdc fport tcp:9333 tcp:9333 已建立
 // 用法:    连 genoffice-app://selfcheck 页面,逐项调用 window.selfcheck.run() 输出 JSON
-// 姊妹工具:Page.captureScreenshot 截图(同 ws 会话,见 PORT_DESIGN §10)
+// 姊妹工具:Page.captureScreenshot 截图(同 ws 会话)
 import { createRequire } from 'node:module'
 
 const req = createRequire(new URL('../package.json', import.meta.url))

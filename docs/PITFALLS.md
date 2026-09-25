@@ -89,8 +89,9 @@ shim 打桩改成 `linux`。
 
 ### 多实例的正解
 
-`multiAppMode` 在 API 26 上不被承认，specified 启动被拒。
-正解是用 entry 的 `launchType`。
+`multiAppMode` 在 API 26 上不被承认，`specified` 启动被拒（`Not support multi-instance`），那个声明已经删掉。
+多实例改用 entry 的 `launchType` 表达；但应用本身是按单实例设计的，所以 **EntryAbility 定为 `singleton`**，
+再次打开文件走 `onNewWant` → 信号文件 → 桩⑰ → control-server，在现有窗口打开（见 `PORT_DESIGN.md` §6.3）。
 
 ### 隐藏的 view 会拦截输入
 

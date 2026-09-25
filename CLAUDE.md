@@ -38,7 +38,7 @@ node scripts/e2e/ohos-smoke.mjs       # 真机 smoke（需先 hdc fport 映射 9
 | `web_engine/` 的适配层、`module.json5` | `docs/ELECTRON_OHOS_CHECKLIST.md` §2 —— 白屏有三个易漏点；权限的唯一事实源也在这里 |
 | `scripts/shim/main-shim.mjs` | 文件头注释 —— 桩的装载顺序是铁律，`process.resourcesPath` 不要轻易碰 |
 | 构建脚本里的产物路径 | `scripts/sync-engine.sh` 头注释 —— 构建期布局和运行期路径不是同一套（`arm64-v8a` vs `arm64`） |
-| 应用侧代码（`thirdparty/` 里的） | `docs/PORT_DESIGN.md` §5.1 —— 那是 submodule，只 cherry-pick 不 merge |
+| 应用侧代码（`thirdparty/` 里的） | `docs/PORT_DESIGN.md` §5 —— 那是 submodule，只 cherry-pick 不 merge |
 
 ## 命名对照
 

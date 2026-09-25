@@ -4,9 +4,8 @@
   //    kAbilityMap 硬约束(EntryAbility/StatelessAbility/TaskManagerAbility 按名 startAbility),勿改名
   //  - executableBinaryPaths:注册可执行位,未注册会被 XPM 内核拦截(exec permission denied)
   //  - extractNativeLibs:true + compressNativeLibs:false:dlopen/exec/mmap 的前提(清单 §2)
-  //  - 权限:全部在 web_engine HAR 的 module.json5(38 条)随 HAR 合并,本模块零声明;
+  //  - 权限:全部在 web_engine HAR 的 module.json5(12 条)随 HAR 合并,本模块零声明;
   //    kernel ACL 若调试证书 profile 不含,构建报错时按官方指引临时注释 HAR 内对应条目
-  //  - launchType specified + AppScope multiAppMode + WebAbilityStage.onAcceptWant = 多窗口三件套
   "module": {
     "name": "entry",
     "type": "entry",

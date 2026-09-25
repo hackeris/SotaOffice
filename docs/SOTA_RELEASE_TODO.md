@@ -12,7 +12,7 @@
 
 | # | 剩余项 | 章节 | 规模 / 备注 |
 | --- | --- | --- | --- |
-| 1 | **品牌文案批量替换** | §3 | 约 1338 处，横跨 213 个文件 × 22 语言 |
+| 1 | **品牌文案批量替换** | §3 | 约 1410 处，横跨 228 个文件 × 20 语言 |
 | 2 | 品牌元信息、窗口标题、About | §3.1–3.3 | appId 变更会影响钥匙串/签名链 |
 | 3 | AI 面板品牌与图标 | §3.4 | 用户直接可见 |
 | 4 | 外链与 Star 推广 | §3.7–3.9 | 6 个上游端点 |
@@ -40,70 +40,68 @@
 论证过程、候选对比、选型硬约束（默认厂商必须在 chat ∩ media 交集内）
 以及 `custom` 端点契约，都在 **`SOTA_DECISIONS.md`**。
 
-> 之前各章用的"待定"字样均已随 D1/D2/D3 拍板解决，本文只列改动本身。
-
 ---
 
-## 1. 账号与身份 ✅ 已完成（阶段二）
+## 1. 账号与身份 🟡 主体已完成
 
 | # | 项 | 位置 | 动作 |
 | --- | --- | --- | --- |
-| 1.1 | 账号入口（Home 左下角头像 → 设置"账号"页） | `G/apps/shell/src/renderer/src/Home.tsx:644-850`（`AccountEntry`）、`SettingsModal.tsx:1122-1169`、`:141,144`（section 定义） | 移除或换自有 |
-| 1.2 | 设备码登录全流程 | `G/packages/ai-search/src/genoffice-auth.ts`（device_code→token→session→api_tokens/create）、IPC `G/apps/shell/src/main/index.ts:3182-3227` | 移除 |
-| 1.3 | **`@genspark/cli`(gsk) 依赖链** | `G/packages/ai-search/src/gsk.ts:38-55,86-107`；`package.json:19`；打包 `electron-builder.cjs:301` | 移除依赖与打包配置；`gskApiKey` 第三级回落必删 |
-| 1.4 | 积分展示与用量外跳 | `index.ts:565-567,3677`；`SettingsModal.tsx:1126-1144`；`gsk.ts:604-619` | 移除；`errorCode:'credits'` 可留给自有后端 |
-| 1.5 | 云项目（Genspark Projects） | `cloud-projects.ts`（全文）、UI `Home.tsx:969-1134`、IPC `index.ts:3725-3733` | 整体移除 |
-| 1.6 | 登录埋点 | `index.ts:3195,3212` | 随 1.1/1.2 移除 |
-| 1.7 | 账号文案（全语言） | `strings.ts:124-144,286,304-329` | 移除或换词 |
-| 1.8 | 凭据落盘目录 | `~/.genoffice/auth.json`、`~/.genoffice/bin/` | 若做自有登录再换品牌目录 |
+| 1.1 ✅ | 账号入口（Home 左下角头像 → 设置"账号"页） | 原 `Home.tsx` 的 `AccountEntry` 已换成 `SettingsEntry`（现 `Home.tsx:638-670`、挂载在 `:2224`）；`SettingsModal.tsx` 的 `SECTIONS` 现为 `:142-148` | 已移除 |
+| 1.2 ✅ | 设备码登录全流程 | 原 `genoffice-auth.ts`（device_code→token→session→api_tokens/create）与对应 IPC | 已移除 |
+| 1.3 ⬜ | **`@genspark/cli`(gsk) 依赖链** | `G/packages/ai-search/package.json:19` 仍声明 `@genspark/cli`；`electron-builder.cjs` 的 `extraResources` 仍有三处把它拷成 `gsk/node_modules/@genspark/cli` | **未做**：代码已无调用（`gsk.ts` 已删），但依赖与打包配置还在，属死依赖，安装包仍会带 gsk CLI 树 |
+| 1.4 ✅ | 积分展示与用量外跳 | `gsk.ts` 已删，相关 UI 与 IPC 已移除 | 已移除 |
+| 1.5 ✅ | 云项目（Genspark Projects） | `cloud-projects.ts` 已删，UI 与 IPC 已移除 | 已移除 |
+| 1.6 ✅ | 登录埋点 | 随 1.1/1.2 移除 | 已移除 |
+| 1.7 ⬜ | 账号文案（全语言） | `strings.ts:124-144`（`// Account` 块）、`:286`、`:304-329` | **未做**：文案一字未动，归入阶段三 i18n |
+| 1.8 | 凭据落盘目录 | 已随账号链移除；仅剩 `cli-link.ts:58` 的 `~/.genoffice/launcher` | 换品牌目录 |
 
 ## 2. AI 能力与后端 🟡 主体已完成
 
-**已完成**（阶段一/二）：2.1–2.8。
-**待做**：2.9–2.11（品牌标识，已核实三处都还是旧品牌）。
+**已完成**：2.1–2.6、2.8。
+**待做**：2.7（未登录错误文案）、2.9–2.11（品牌标识，三处都还是旧品牌）。
 
 | # | 项 | 位置 | 动作 |
 | --- | --- | --- | --- |
 | 2.1 ✅ | **默认 provider = genspark，且一切异常配置都回落 genspark** | `providers.ts:42-62,304-323,338-356`；`media.ts:20-34,175-191,246-263`；`search-settings.ts:8-21` | 按 D1 移除 genspark + 回退语义改为"未配置则禁用并提示" |
-| 2.2 ✅ | 模型清单（硬编码上游代理模型名） | `providers.ts:44-62` + `RETIRED_MODELS` `:378-383` | 换成 BYOK 模型清单 |
+| 2.2 ✅ | 模型清单（硬编码上游代理模型名） | `providers.ts:44-62` + `RETIRED_MODELS` `:313,372` | 换成 BYOK 模型清单 |
 | 2.3 ✅ | LLM 代理端点硬编码 | `providers.ts:9-13`；`registry.ts:146-155` | 移除；自建走 `custom` 的 baseUrl |
 | 2.4 ✅ | `X-Agent-Type` 计费归属头 | `providers.ts:20-26`；注入 `protocols/anthropic.ts:140,271`、`openai-compatible.ts:158,324` | 随 2.3 移除 |
 | 2.5 ✅ | 云单页幻灯片（gsk slide_generate） | `gsk.ts:339-450`；`slides-main.ts:1642-1694` | 删调用，保留本地 BYOK 路径 |
 | 2.6 ✅ | 生图/媒体解析/搜索的 genspark 路由 | `media-tools.ts:29-32,73-78`、`search-tools.ts:20,40`、`index.ts:144-151,186-193` | 按 D3 处理 |
-| 2.7 🟡 | 未登录错误文案（21 语言） | `docs-main.ts:204` 起；各 app `i18n/ai/*.ts` | 改"未配置 AI 后端 + 打开设置"；`errGskCli` 已改名，文案待改 |
+| 2.7 🟡 | 未登录错误文案（20 语言） | `docs-main.ts:200` 起；各 app `i18n/ai/*.ts` | 改"未配置 AI 后端 + 打开设置"；`errGskCli` 已改名 `errAiProviderUnset`，文案待改 |
 | 2.8 ✅ | gsk 登录态门禁按钮（4 个编辑器 AI 面板） | 各 `AiPanel.tsx` + `ai:gsk-status`/`ai:gsk-login` 通道 | 随 1.2 移除 |
 | **2.9** ⬜ | **AI User-Agent** | `G/packages/ai-provider/src/fetch.ts:25`（`AI_DEFAULT_USER_AGENT = 'GenOffice'`） | 改为 `SotaOffice/<version>` |
 | **2.10** ⬜ | **Codex CLI 提示词自称 GenOffice** | `G/packages/ai-provider/src/codex-app-server.ts:65,376` | 换品牌，或默认隐藏该 provider |
-| **2.11** ⬜ | **代理探测硬编码 genspark.ai** | `G/apps/shell/src/main/index.ts:4525`、`slides-main.ts:4678-4706` | 换自有域名或删（机制可保留） |
+| **2.11** ⬜ | **代理探测硬编码 genspark.ai** | `G/apps/shell/src/main/index.ts:4525`、`slides-main.ts:4651-4652` | 换自有域名或删（机制可保留） |
 
 ## 3. 品牌与文案 ⬜ 待做
 
-**规模**：`genspark` / `Genspark` / `GenSpark` 在 `apps` 与 `packages` 下共约 **1338 处、213 个文件**：
+**规模**：`genspark` / `Genspark` / `GenSpark` 三种写法，`apps` 下共约 **1410 处、228 个文件**（`packages` 另有 66 处 / 28 文件）：
 
 | app | 文件数 | 提及次数 |
 | --- | --- | --- |
-| shell | 10 | 481（`strings.ts` 占 333） |
-| docs | 70 | 276 |
+| shell | 14 | 494 |
+| docs | 73 | 323 |
 | slides | 70 | 267 |
-| sheets | 29 | 237 |
-| html | 27 | 39 |
-| markdown | 7 | 38 |
+| sheets | 34 | 243 |
+| html | 28 | 40 |
+| markdown | 9 | 43 |
 
-集中在约 8–10 个 key 乘 22 种语言，**适合脚本批量替换 + 抽查**（注意大小写三种写法）。
+集中在约 8–10 个 key 乘 20 种语言，**适合脚本批量替换 + 抽查**。
 
 | # | 项 | 位置 | 动作 |
 | --- | --- | --- | --- |
 | 3.1 | 应用元信息 | `electron-builder.cjs:235-236`（appId `com.genoffice.app`、productName）、`:496-497`、`:511,535,553`；各 app `package.json` | 换品牌（**appId 变更影响钥匙串/签名链**） |
-| 3.2 | 窗口与 HTML 标题（7 处） | `index.ts:2552`；7 个 `renderer/index.html:10` | 换 |
-| 3.3 | About 对话框 + 菜单标签（21 语言） | `app-menu.ts:580-591`（硬编码）、`:48,73` 及全 locale 块 | 换 |
-| 3.4 | AI 面板品牌（用户直接可见） | docs `Ribbon.tsx:2857,2957`、`AiPanel.tsx:1252,1284`；slides `App.tsx:3290,3628-3629`；markdown `AiPanel.tsx:765-770`；图标 `GensparkMark`；`i18n/ai/*` 的 `aiPanelTitle` | 换自有 AI 品牌 + 新图标 |
+| 3.2 | 窗口与 HTML 标题（7 处） | `index.ts:2470`；7 个 `renderer/index.html:10` | 换 |
+| 3.3 | About 对话框 + 菜单标签（20 语言） | `app-menu.ts:580-591`（硬编码）、`:48,73` 及全 locale 块 | 换 |
+| 3.4 | AI 面板品牌（用户直接可见） | docs `Ribbon.tsx:2857,2957`、`AiPanel.tsx:1216,1244,1248-1249`；slides `App.tsx:3290,3628-3629`；markdown `AiPanel.tsx:746-751`；图标 `GensparkMark`；`i18n/ai/*` 的 `aiPanelTitle` | 换自有 AI 品牌 + 新图标 |
 | 3.5 | 字体族名（用户可见） | `GenOffice Sans/Serif/Gothic KR`、`Poppins/Che Latin KR` | 换名（注意 docx 兼容映射联动） |
 | 3.6 | Logo 与图标资产 | `assets/genoffice-logo.svg`、`app-icon.png`、`build/icons/*` | 换 Sota 资产 |
 | 3.7 | 外链（6 个上游端点） | `github.com/genspark-ai/genoffice`（About/Star/star 计数/更新页）、`genoffice.ai/join`、`genspark.ai/pricing` | 换自有或删除 |
-| 3.8 | Star 推广机制 | `star-prompt.ts`（全文）、`StarPromptCard.tsx`、`SettingsModal.tsx:1345-1360` | 独立发布建议整体移除 |
-| 3.9 | Integrations 安装命令 | `IntegrationsPane.tsx:30` + 测试断言 | 换 Sota 仓库 |
+| 3.8 | Star 推广机制 | `star-prompt.ts`（全文）、`StarPromptCard.tsx`、`SettingsModal.tsx:1188-1206` | 独立发布建议整体移除 |
+| ~~3.9~~ | ~~Integrations 安装命令~~ | — | **作废**：集成页已随账号链整体移除；需清掉残留的测试导入（`apps/shell/tests/settings-integrations.test.ts` 仍引用已不存在的 `IntegrationsPane`） |
 | 3.10 | CLI/MCP/SKILL 命名 | `skills/genoffice/SKILL.md`、`cli/src/agent-skills.ts:25`、`result.ts:149`、`commands/mcp.ts:8`、`fs.ts:37`、`cli-link.ts`、MCP 示例名 | 换品牌（技能名变更需发布迁移） |
-| 3.11 | 默认保存目录 | `G/apps/shell/src/shared/home-api.ts:205`（`<Documents>/GenOffice`） | 换 `<Documents>/Sota Office` |
+| 3.11 | 默认保存目录 | `G/apps/shell/src/shared/home-api.ts:191`（实现落在 `packages/electron-utils/src/default-save-dir.ts`） | 换 `<Documents>/Sota Office`——**注意 shim 里的日志路径与 documents 探测路径用的是同一个目录名，要同步改** |
 | 3.12 | 零散硬编码品牌 | `control-handlers.ts:45`、`NoteMargin.tsx:168,302`、`pdf-skill.ts:5`、`strings-zotero.ts` | 换 |
 
 ## 4. 遥测 · 更新 · 云 🟡 4.1 已完成
@@ -113,8 +111,8 @@
 | 4.1 ✅ | GA4 匿名遥测 | `analytics.ts`（整文件，端点 `google-analytics.com/mp/collect`）；key 由 CI 注入 | 已关闭：本构建不注入 key，`initAnalytics()` 保持 no-op |
 | 4.2 ⬜ | 隐私文档与遥测强绑定 | `G/PRIVACY.md:9-70`、`apps/shell/tests/privacy-doc.test.ts`（锁定测试）、`strings.ts` 的 `setAnalyticsDesc`、`Onboarding.tsx:215-226` | **4.1 改了，这些必须同步** |
 | 4.3 ⬜ | **自动更新（electron-updater）** | `updater.ts`（feed 由 `GENOFFICE_UPDATE_URL` 注入；检查 15s 后 + 每 4h）、`docs/src/main/updater.ts` | 鸿蒙侧**整体移除**（须走应用市场）；桌面版换自有 URL |
-| 4.4 ⬜ | 更新 UI 入口 | `SettingsModal.tsx:78,1328-1341`、`app-menu.ts:564-586` | 随 4.3 |
-| 4.5 ⬜ | GenTeam 社区 + GitHub star 生态 | `index.ts:561-563,3672`、`Onboarding.tsx:226`、star 计数 `index.ts:601-617` | 移除或换自有 |
+| 4.4 ⬜ | 更新 UI 入口 | `SettingsModal.tsx:75-77,1170-1187`、`app-menu.ts:564-586` | 随 4.3 |
+| 4.5 ⬜ | GenTeam 社区 + GitHub star 生态 | `index.ts:485,3533-3534`、`Onboarding.tsx:215`、star 计数 `index.ts:521-537` | 移除或换自有 |
 | 4.6 ⬜ | 字体 CDN | `slides/src/main/font-store.ts:16-52` | 换自有 CDN 或内置字体包（sha256 校验可保留） |
 | 4.7 ⬜ | 代理探测域名 | 见 2.11 | 同 |
 
@@ -123,7 +121,7 @@
 | # | 项 | 位置 | 动作 |
 | --- | --- | --- | --- |
 | 5.1 ⬜ | 应用名 | `S/AppScope/resources/base/element/string.json`（`app_name: "GenOffice"`） | → `Sota Office` |
-| 5.2 ⬜ | Ability 标签/描述 | `S/entry/src/main/resources/base/element/string.json`（6 处） | → Sota 品牌 |
+| 5.2 ⬜ | Ability 标签/描述 | `S/entry/src/main/resources/base/element/string.json`（7 处） | → Sota 品牌 |
 | 5.3 ⬜ | 版本号 | `S/AppScope/app.json5`（`versionName: "0.1.0"`、`versionCode: 1000000`） | 定发布版本 |
 | 5.4 ✅ | 应用图标 | `S/AppScope/resources/base/media/*`、`entry/.../app_icon.png` | 已换（黑底白 G，`scripts/gen-icons.py` 生成；有品牌图后重生成） |
 | 5.5 ⬜ | 权限 reason 文案 | `S/web_engine/src/main/resources/{base,zh_CN,en_US}/element/string.json` | 复核措辞（上架需要） |
@@ -156,7 +154,7 @@
 | --- | --- | --- |
 | 0 | 拍板 D1/D2/D3 | ✅ 2026-09-24 |
 | 1 | 第 2 章（AI 后端与模型） | ✅ 已完成 |
-| 2 | 第 1 章（账号与身份） | ✅ 已完成 |
+| 2 | 第 1 章（账号与身份） | 🟡 主体完成，剩 gsk 死依赖与账号文案 |
 | 3 | 第 3 章（品牌与文案，i18n 脚本化）+ 2.9–2.11 + UI 引导 | ⬜ **当前阶段** |
 | 4 | 第 4 章（遥测/更新） | ⬜ |
 | 5 | 第 5 章（壳工程） | ⬜ |
@@ -175,7 +173,7 @@
 
 ### 阶段一：核心逻辑层（已完成）
 
-分支 `ohos/sota-debrand`（genoffice 仓），30 文件 +371/-586。
+分支 `ohos/sota-debrand`（genoffice 仓），35 文件 +460/-706。
 
 - **ai-provider**：去 `genspark` provider / 端点 / 归属头 / 兜底；默认厂商切 `glm`（chat 1 处 + media 3 处）；
   `activeProvider` / `activeMediaProvider` 改**可空**（无有效配置返回 null，不再静默打向上游）；
@@ -207,7 +205,9 @@
 - **slides / sheets / docs**：各自的 `ai:gsk-status` / `ai:gsk-login` handler
 - **slides**：云单页幻灯片（`slides:cloud-page-generate` 全套）；
   **保留**本地 BYOK 生成路径（`slides:local-page-generate`）
-- **5 个 app 的 AI 面板**：`gskLoggedInRef` 门禁（实测只写不读）、`loginRequired` 标记与登录按钮
+- **5 个 app 的 AI 面板**：`gskLoggedInRef` 门禁（实测只写不读）与登录按钮已清除；
+  `loginRequired` 死 prop 仍留在 3 处（`docs/AiPanel.tsx:100`、`sheets/AiChatPanel.tsx:203`、
+  `slides/AiPanel.tsx:251`，只声明不使用），待删
 
 **改造**：
 
@@ -215,16 +215,16 @@
 - `SettingsModal.tsx`：删账号页与 8 个账号 props，默认落 **AI 模型页**
 - `media-tools.ts`：媒体工具改**纯 BYOK**，未配置时返回 `MEDIA_NOT_CONFIGURED_ERROR`；
   `GSK_RMBG_MODEL` 与透明背景的二次抠图链随 gsk 一并移除
-- 代理函数改名 `setGskProxyUrl` / `gskProxyUrl` → `setAiProxyUrl` / `aiProxyUrl`（消费方 5 处）
+- 代理函数改名 `setGskProxyUrl` / `gskProxyUrl` → `setAiProxyUrl` / `aiProxyUrl`（消费方 4 处）
 
 **验证**：全量 typecheck 仅剩既有 `html2docx:317`；`npm run build:all` **通过**；
 ai-search 20 测试通过（media-tools 测试重写为 BYOK 语义）。
 
 ### 阶段三（进行中）
 
-- **i18n 品牌文案**（§3）：各 app 的 `aiGskLoginBtn` 等 gsk 文案（63 个文件）、
+- **i18n 品牌文案**（§3）：各 app 的 `aiGskLoginBtn` 等 gsk 文案（60 个文件）、
   slides 的 `errGskNotLoggedIn`（`errGskCli` 已改名 `errAiProviderUnset`，文案待改）、
-  以及上表统计的 1338 处 genspark 提及
+  以及上表统计的 1410 处 genspark 提及
 - **shared/ipc 与 preload 的类型残留**：`ai:gsk-status` channel 常量、
   `GenSparkAccountStatus` 类型（现无 main handler，调用会 reject）
 - **AI 品牌标识**：§2.9–2.11 三处

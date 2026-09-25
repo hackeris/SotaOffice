@@ -26,6 +26,8 @@ build-ohos.sh         权限校验 → ohpm → hvigor → 打包 HAP
   当前构建环境是容器，工具链由容器提供。
 - **应用产物仓库**：`thirdparty/genoffice`（submodule）。它自己的构建产物是这一步的输入，
   首次要先进去 `npm ci` 加 `npm run build:all`。详见「第二步」。
+- **引擎二进制来源**：`sync-engine.sh` 默认从 `.temp/engine-ref` 取。**它不入库**，
+  clone 带不来——**没有这个目录，构建第一步就挂**。
 - **Rust 交叉编译 target**：`aarch64-unknown-linux-ohos`，编译 xlsx sidecar 用。
 - **submodule 初始化**：应用产物仓库带 Git LFS 文件，克隆时要跳过 smudge，
   否则拉下来的是指针（详见故障表第 12 条）。
@@ -85,7 +87,7 @@ npm run build:all
 `cargo` 要在 PATH 里（sheets 的原生构建需要）。不加 `--no-build` 时脚本会自动跑 `build:all`，
 耗时几分钟，日常组装用 `--no-build` 跳过。
 
-组装完会断言体积在 60～150MB 之间，基线约 110MB。超范围说明有东西多装或漏装。
+组装完会告警体积是否落在 60～150MB 之间（基线约 110MB）。**超范围不阻塞构建**，但说明有东西多装或漏装，要核对裁剪。
 
 **分支守卫**：应用仓库必须在允许的分支上，脚本里是精确匹配（不是前缀），
 新增工作分支时要一并加进去。
@@ -96,7 +98,7 @@ npm run build:all
 bash scripts/build-ohos.sh [--no-sign]
 ```
 
-流程是：校验权限声明 → `ohpm install` → `hvigorw assembleHap` → 31 项产物断言。
+流程是：校验权限声明 → `ohpm install` → `hvigorw assembleHap` → 27 项关键件断言（GenOffice 版；自检版 17 项）。
 
 产物在 `entry/build/default/outputs/default/` 下，签名的叫 `entry-default-signed.hap`。
 

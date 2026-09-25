@@ -29,13 +29,6 @@ EntryAbility、BrowserAbility、StatelessAbility）。
 所以这个名字本身就是引擎契约的一部分。**动手前先查清楚它该不该在。**
 **做法**：确认后，要么补声明，要么删文件。
 
-### 四套命名并存
-
-仓库叫 `smartoffice-ohos`、产品叫 Sota Office、代码标识符还是 `GenOffice`、
-早期脚本注释里写 `genoffice-ohos`。`SOTA_RELEASE_TODO.md` 只讲了代码怎么改，
-没讲这几个名字的收敛规则。
-**做法**：定一条规则写进 `CLAUDE.md`，避免新人反复问。
-
 ### About 页的第三方声明没生成
 
 `THIRD-PARTY-NOTICES.txt` 当前不存在。构建时会提示：
@@ -48,9 +41,18 @@ EntryAbility、BrowserAbility、StatelessAbility）。
 **做法**：在应用仓库里跑 `npm run notices`，产物是 `apps/shell/build/THIRD-PARTY-NOTICES.txt`，
 `build-genoffice.sh` 会自动拷进 resfile。
 
+### `webContents.print` 降级没落地
+
+M2 已定案（见 `M2_VERIFY_CHECKLIST.md` §D1）：fork 的 `webContents.print()` 回调正常触发但恒失败
+（未对接系统打印服务），降级方案是**在 shim 里拦截 print 改走 `printToPDF`**。
+但 shim 里至今没有任何 print 相关代码，`scripts/` 下也没有这条待办。
+
+**影响**：用户点"打印"时静默失败（导出 PDF 不受影响）。
+**做法**：在 shim 加 print 拦截桩，四个模块（docs/sheets/slides/pdf）逐个验。
+
 ## 二、机制上没验证过的
 
-这些在 `MIGRATION_ISSUES.md` 里被标记过，但**全仓找不到任何后续验证记录**。
+这些在 `MIGRATION_ISSUES.md` 里被标记过，但**没有完整的后续验证记录**（个别项只留下过部分观察，见表）。
 
 | 项 | 为什么要验 |
 | --- | --- |
@@ -61,9 +63,10 @@ EntryAbility、BrowserAbility、StatelessAbility）。
 | 回收站、在文件管理器中显示 | 删除链的用户预期 |
 | 拖放、深色模式 | 未验证 |
 
-### 视觉基线（字体）
+### 视觉基线（字体度量）
 
-**从没启动过**。POC-6 在计划里一直挂着"待启动"，全仓没有一条真机字体数据。
+**从没启动过**。真机上只观察过"中文字体渲染正常、无豆腐块"——那是渲染结果，不是度量基线；
+全仓没有一条字体度量数据。
 
 这个不是小问题：应用靠渲染层做文字排版，CJK 字体在鸿蒙上的度量如果和桌面差得多，
 排版会走样。应用本身有字体度量合并逻辑和 wasm 子集化，都需要一份真实基线才能调。
@@ -72,47 +75,12 @@ EntryAbility、BrowserAbility、StatelessAbility）。
 
 ## 三、文档本身的债
 
-### 承诺过但没写的文档
-
-`PORT_DESIGN.md` 开头列过两份配套文档：`KEYPOINTS.md`（不可变决策与踩坑）和
-`FEATURE_MATRIX.md`（能力矩阵与验收）。**两份都没写。**
-
-它们要承载的内容现在散在别处——前者在 `PORT_DESIGN.md` §0 与 `PITFALLS.md`，
-后者在 `ELECTRON_OHOS_CHECKLIST.md` §5 与 `M1_ACCEPTANCE.md`。
-要么补写，要么把那行承诺改掉（已改为指向现有文档）。
-
-> 早先审计列过一批"死引用"（`dialog.sh`、`copy.sh`、`save-signing.sh` 等），
-> 复核后确认是误判：`dialog.showSaveDialog` 之类是 API 名而非文件名，
-> `copy.sh` 属于官方指导项目，`build-app.sh` 的退役在正文里已有说明。不需要处理。
-
 ### 上游回馈的提交状态未知
 
 `UPSTREAM_FEEDBACK.md` 里有五条 fork 缺陷，整理得很完整，但**没记录是否已提交、
 以什么编号跟踪**。时间一长就没人知道这些到底提没提。
 
-### 部分文档的结论已经过期但没标注
-
-见 `README.md` 的「读之前先知道」一节，那里列了五处。已经在索引里做预警，
-但没有逐处修正。
-
-## 四、仓库风险
-
-### submodule 的 fetch 源指向 `.temp/`
-
-两个 submodule 的 `origin` 现在都是 `file://` 指向 `.temp/` 下的本地副本。
-**`.temp/` 一删，`git submodule update` 就再也拉不回来。**
-
-### 有两个 commit 不在任何远端
-
-应用仓库的 `ohos/sota-debrand` 分支上有两个 commit（这两周的去上游化改造），
-**它们只存在于 `.git/modules/` 里**——那个分支没有 upstream，本地副本里也没有这两个对象，
-从任何已记录的 remote 都拉不到。
-
-`thirdparty/VERSIONS.md` 里给的 tag 校验命令现在跑会直接失败（它还以为锚在 `ohos-v1.0.0`）。
-
-**做法**：把分支推到 fork 上，然后 `git submodule sync`。这是当前最该先处理的一件事。
-
-## 五、发布相关
+## 四、发布相关
 
 ### 体积
 
@@ -121,7 +89,7 @@ HAP 三百多兆，而应用商店对单包体积有上限（具体数值待确�
 
 ### 法务
 
-NOTICE 文件和隐私政策的内容需要法务确认。改造删掉了遥测，隐私政策也得跟着改。
+NOTICE 文件和隐私政策的内容需要法务确认。遥测已关闭（代码保留、本构建不注入 key，`initAnalytics()` 是 no-op 桩），隐私文档与隐私政策要跟着这个口径改——同步项挂在 `SOTA_RELEASE_TODO.md` §4.2 / §6.3。
 
 ### 去上游化还没做完
 

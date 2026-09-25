@@ -1,365 +1,198 @@
-# GenOffice → HarmonyOS 移植设计(PORT_DESIGN)
+# GenOffice → HarmonyOS 移植设计
 
-> 状态:**已定稿**(2026-09-19,关键决策经逐项确认)
-> 分区:移植方案 | 目标:HarmonyOS PC(2in1)优先
-> 配套文档:`docs/appendix/`(三份源码级分析报告);决策与踩坑见 §0 与 `docs/PITFALLS.md`,能力矩阵与验收见 `docs/ELECTRON_OHOS_CHECKLIST.md` §5 与 `docs/M1_ACCEPTANCE.md`
+> 分区：移植方案 | 目标：HarmonyOS PC(2in1) 优先
+> 决策与架构看本文；踩坑见 `PITFALLS.md`；能力矩阵与验收见 `ELECTRON_OHOS_CHECKLIST.md`、`M1_ACCEPTANCE.md`；
+> 上游应用的源码级分析见 `appendix/`；文档索引见 `README.md`。
 
----
+## 0. 决策
 
-## 0. 结论先行(不可推翻决策)
-
-| # | 决策 | 状态 | 依据 |
-|---|---|---|---|
-| D1 | **路线 A:Electron-on-OHOS**(openharmony-sig/electron `v37.2.0-openharmony` 运行时,Chromium 138 + Node 22.17) | ✅ 定稿 | GenOffice 是"重 Node 主进程"应用(419 IPC + 4 scheme + printToPDF + WebContentsView + 内嵌 HTTP 服务),B 路线(ArkTS 壳重写)成本人年级;hos_vscodium 已真机验证同级复杂度应用可跑 |
-| D2 | **PC(2in1)优先**;fork 的 `web_engine` HAR `deviceTypes` 仅 `["tablet","2in1"]`,**手机不在 fork 支持面** | ✅ 定稿 | fork 窗口层(ozone-ohos)面向大屏;手机若做需另行评估(B 路线或等上游) |
-| D3 | **版本策略:GenOffice 降级适配 Electron 37**(不升级 fork 到 43) | ✅ 定稿 | 升级 fork = 自编译 Chromium(>200G 磁盘/>32G 内存);降级清点可本机无设备并行(POC-2) |
-| D4 | 发布侧 kernel ACL 目标**仅 1 条**:`kernel.ALLOW_WRITABLE_CODE_MEMORY` | ✅ 已确认可得 | V8 JIT 的 W^X 内存页,Electron 运行时唯一硬需求;场景对口官方定义"自带引擎的即时编译" |
-| D5 | `kernel.LOAD_INDEPENDENT_LIBRARY` **从必需清单移除**:它是 VSCodium 内置 CLI 工具(bash/zsh/rg)的需求,不是 Electron 运行时需求(libelectron.so 走 HAP so 签名体系装载) | ✅ 定稿 | 用户澄清 + 机制分析;POC-4 以"静态链接 sidecar + HAP 不声明该权限"实测佐证 |
-| D6 | Rust xlsx-sidecar **静态链接**(musl crt-static)后走 `executableBinaryPaths` 注册 + spawn,stdio JSON 协议零改动 | ✅ 定稿 | 上游 Windows 版已 crt-static;规避独立库装载权限问题 |
-| D7 | 文档/构建产物可复现纪律:所有产物不入库、一键重生成脚本、毁灭性重建演练、版本号单一数据源 | ✅ 沿用 | Pure Office 方法论 + 用户全局构建可复现原则 |
-
----
+| # | 决策 | 依据 |
+|---|---|---|
+| D1 | **路线 A：Electron-on-OHOS**——用 openharmony-sig 维护的 Electron fork（`v37.2.0-openharmony`，Chromium 138 + Node 22.17）当运行时，应用产物原样装入 HAP | GenOffice 是"重 Node 主进程"应用（419 个 `ipcMain.handle` + 4 个自定义 scheme + printToPDF + WebContentsView + 内嵌 HTTP 服务），ArkTS 壳重写是**人年级**成本，换运行时是人月级 |
+| D2 | **PC(2in1) 优先**；fork 的 `web_engine` HAR `deviceTypes` 仅 `["tablet","2in1"]`，**手机不在支持面** | fork 的窗口层面向大屏；手机若要做需另行评估 |
+| D3 | **版本策略：应用降级适配 Electron 37**（不去升级 fork 到 43） | 升级 fork 等于自编译 Chromium（>200G 磁盘、>32G 内存） |
+| D4 | 发布侧 kernel ACL 目标**仅 1 条**：`kernel.ALLOW_WRITABLE_CODE_MEMORY` | V8 JIT 的 W^X 内存页，是 Electron 运行时的唯一硬需求；场景对口官方定义"自带引擎的即时编译" |
+| D5 | `kernel.LOAD_INDEPENDENT_LIBRARY` **不申请** | 它是参考工程内置 CLI 工具（bash/zsh/rg）的需求，不是 Electron 运行时需求——`libelectron.so` 走 HAP 的 so 签名体系装载。将来做 CLI 生态时再评估 |
+| D6 | Rust xlsx-sidecar 交叉编译为 aarch64-ohos 可执行文件，走 `executableBinaryPaths` 注册 + spawn，stdio JSON 协议零改动 | 规避独立库装载的权限问题；上游 Windows 版也是独立可执行文件 |
+| D7 | 产物可复现纪律：产物不入库、一键重生成脚本、毁灭性重建演练 | 全局构建可复现原则 |
 
 ## 1. 背景与对象
 
-**GenOffice**(源码副本在 `.temp/genoffice`):开源 AI Office 套件(Docs/Sheets/Slides/PDF/Markdown/HTML + AI 面板),Electron 43.3 + Node ≥22.12 + npm workspaces monorepo,约 55 万行 TS(渲染层 35.5 万 + 主进程 5.4 万 + 引擎包 14.3 万)。
+**GenOffice**（上游应用，源码在 `thirdparty/genoffice`）：开源 AI Office 套件（Docs/Sheets/Slides/PDF/Markdown/HTML + AI 面板），Electron 43.3 + Node ≥22.12 + npm workspaces monorepo，约 55 万行 TS（渲染层 35.5 万 + 主进程 5.4 万 + 引擎包 14.3 万）。
 
-对移植关键的仓库特征(详见附录 A):
+对移植关键的仓库特征（详见 `appendix/A`）：
 
-- **渲染层 100% 纯 Web**:全仓 renderer `from 'electron'` 零命中,React 19 + DOM + Canvas(TipTap/Univer/Konva/PDF.js/CodeMirror),构建产物为纯静态资源;
-- **零 napi/.node 模块**——避开 fork 已知最深的坑(ObjectWrap 构造崩溃、napi-dyn 转发需求);
-- 二进制依赖仅:xlsx-sidecar(Rust,stdio JSON-lines 子进程)、pdfium/harfbuzz wasm×3(跑在 Node 主进程)、2 个平台 OCR helper(有 Linux 无引擎优雅降级路径);
-- 最大负担:419 个 `ipcMain.handle`、7 组 preload `window.*` API、4 个自定义 scheme、WebContentsView 多标签、printToPDF、菜单/单实例/updater。
+- **渲染层 100% 纯 Web**：全仓 renderer `from 'electron'` 零命中，React 19 + DOM + Canvas（TipTap/Univer/Konva/PDF.js/CodeMirror），构建产物是纯静态资源；
+- **零 napi/.node 模块**——避开了 fork 已知最深的坑（ObjectWrap 构造崩溃、napi-dyn 转发）；
+- 二进制依赖只有三样：xlsx-sidecar（Rust，stdio JSON-lines 子进程）、pdfium/hb-subset wasm（跑在 Node 主进程）、平台 OCR helper（有降级路径）；
+- 最大负担：419 个 `ipcMain.handle`、7 组 preload `window.*` API、4 个自定义 scheme、WebContentsView 多标签、printToPDF、菜单、单实例、updater。
 
-## 2. 选型论证(A vs B)
+## 2. 选型论证
 
-| 维度 | A:Electron-on-OHOS(选定) | B:ArkTS 壳 + ArkWeb(Pure Office 模式) |
+| 维度 | A：Electron-on-OHOS（选定） | B：ArkTS 壳 + ArkWeb |
 |---|---|---|
-| 主进程 5.4 万行 | 原样跑(Node 22.17 完整运行时) | 419 IPC + 4 scheme + 打印 + 多标签逐个 ArkTS 重写 |
-| printToPDF / CDP / WebContentsView | fork 内置(逐项验证) | ArkWeb 无对应,另起炉灶 |
-| Rust sidecar | 交叉编译 + spawn,协议零改动 | 必须改造 NAPI .so,协议重设计 |
-| wasm(pdfium/harfbuzz) | fork Node 主进程原样跑(待验证) | ArkTS 无 wasm 引擎,PDF 管线搬家 |
-| MCP server / control socket | 原样跑 | 无对应,裁剪 |
-| Electron 43→37 | 需清点适配(POC-2) | 无此问题 |
-| kernel ACL | 需 1 条(D4) | 不需要 |
+| 主进程 5.4 万行 | 原样跑（Node 22.17 完整运行时） | 419 IPC + 4 scheme + 打印 + 多标签逐个重写 |
+| printToPDF / CDP / WebContentsView | fork 内置 | ArkWeb 无对应，另起炉灶 |
+| Rust sidecar | 交叉编译 + spawn，协议零改动 | 必须改造 NAPI `.so`，协议重设计 |
+| wasm（pdfium 等） | fork 的 Node 主进程原样跑 | ArkTS 无 wasm 引擎，PDF 管线搬家 |
+| MCP server / control socket | 原样跑 | 无对应，裁剪 |
+| Electron 43→37 | 需清点适配 | 无此问题 |
+| kernel ACL | 需 1 条（D4） | 不需要 |
 | 工作量 | **人月级** | **人年级** |
 
-判据出处:Pure Office `ONLYOFFICE_OHOS_PORT_DESIGN.md` §2.3 早已研究过 Electron-on-OHOS 并留下结论——"目标应用深度依赖 Node 主进程/多进程/Electron API 面时,C 路线可能反而省"。GenOffice 命中该判据的极端形态。
+判据出处见 `appendix/B`：目标应用若深度依赖 Node 主进程、多进程与 Electron API 面，换运行时反而比重写省。GenOffice 命中该判据的极端形态。
 
 ## 3. 目标架构
 
 ```
 ┌─ HarmonyOS HAP(单 entry 模块 + web_engine HAR)───────────────────┐
 │  entry 模块(ArkTS,继承 WebAbility/WebAbilityStage,薄壳)         │
-│    ├─ executableBinaryPaths: electron, node, xlsx-sidecar(静态)   │
-│    └─ module.json5 权限(见 §4,从 web_engine 裁剪)                │
+│    ├─ executableBinaryPaths: electron / node / xlsx-sidecar      │
+│    │    都落在 libs/arm64-v8a/(源布局;运行期是 libs/arm64)      │
+│    └─ 文件关联 skills(6 类 UTD,见 §6.3)                          │
 │                                                                    │
-│  web_engine HAR(自 hos_vscodium 整体搬用,零改动)                 │
-│    ├─ libelectron.so (170MB, Chromium 138 + Node 22.17)            │
+│  web_engine HAR(适配层已自有化入本仓 git 管理)                    │
+│    ├─ libelectron.so (177MB, Chromium 138 + Node 22.17)            │
 │    ├─ libadapter.so / libffmpeg.so                                 │
 │    └─ resfile: pak / icudtl / snapshot / locales                   │
 │                                                                    │
-│  resfile/resources/app/  ← GenOffice 打包产物                       │
-│    ├─ main-shim.mjs(hos_vscodium 模板定制)                        │
-│    │    process.platform='linux' mock / HOME·XDG·chdir→沙箱        │
-│    │    / 原生模块预加载(如需)/ updater 打桩 / WCO 打桩           │
-│    ├─ out/            shell 主进程 bundle(含六模块 main,原样)     │
-│    ├─ modules/*/      六个 renderer 静态产物(原样)                │
-│    ├─ native/xlsx-sidecar  ← Rust aarch64-ohos 静态编译            │
-│    └─ wasm/{pdfium,hb-subset,harfbuzz}.wasm                        │
+│  resfile/resources/  ← 应用打包产物                                 │
+│    ├─ app/   主进程 bundle + main-shim.mjs(兼容层,见 SHIM_INTERNALS)│
+│    ├─ modules/<模块>/{preload,renderer}  六个模块各自的静态产物     │
+│    └─ wasm/{pdfium,hb-subset}.wasm                                 │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-装载链(实证自 hos_vscodium):`WebAbilityStage → XComponent(libraryname="adapter") 装载 libadapter.so → nativeContext.runBrowser(argv) → appspawn fork `electron` 启动器 → 链接 libelectron.so → ElectronMain → 载入 resfile/resources/app/package.json 的 main(= 我们的 shim)。
+**装载链**：`WebAbilityStage → XComponent(libraryname="adapter") 装载 libadapter.so → nativeContext.runBrowser(argv) → appspawn fork electron 启动器 → 链接 libelectron.so → ElectronMain → 载入 resfile/resources/app/package.json 的 main（= main-shim.mjs）`。
 
-## 4. 权限清单(分层,含确认结论)
+**权限声明只有一处**：`web_engine/src/main/module.json5`（随 HAR 合并），entry 模块自身零声明。
 
-**两条装载/签名体系的区分(勿混淆,D5)**:
-- HAP so 签名体系:`libs/arm64-v8a/*.so` 安装时注册签名(XPM)——libelectron/libadapter/各 .so 别名模块走这条,**不需要 LOAD_INDEPENDENT_LIBRARY**;
-- 二进制证书体系:`executableBinaryPaths` 注册的独立可执行文件(electron/node 启动器、xlsx-sidecar)及其工具链——**VSCodium 因内置 bash/zsh/rg 才申请 LOAD_INDEPENDENT_LIBRARY**;GenOffice 不带 CLI 工具则不申请。
+## 4. 权限
 
-| 层 | 权限 | 判定 |
+**两条装载/签名体系的区分（勿混淆，见 D5）**：
+
+- **HAP so 签名体系**：`libs/arm64-v8a/*.so` 安装时注册签名（XPM）——`libelectron`/`libadapter` 等走这条，**不需要 `LOAD_INDEPENDENT_LIBRARY`**；
+- **二进制证书体系**：`executableBinaryPaths` 注册的独立可执行文件（electron/node 启动器、xlsx-sidecar）——参考工程因为内置 bash/zsh/rg 才申请那条权限，本项目不带 CLI 工具，不申请。
+
+当前声明共 **12 条**（`requestPermissions`）+ 2 条 `definePermissions`：
+
+| 层 | 权限 | 用途 |
 |---|---|---|
-| **Electron 运行时,不可谈判** | `kernel.ALLOW_WRITABLE_CODE_MEMORY` | **唯一 kernel ACL**(已确认可得;官方定义对口"自带引擎 JIT";调试证书 5.0.3+ 原生支持,POC 无阻塞) |
-| | `CUSTOM_SANDBOX` / `ALLOW_EXTERNAL_NATIVE_CODE` / `WEB_NATIVE_MESSAGING` | 运行时(adapter/Chromium)需求,受限开放权限,AGC 流程申请 |
-| | `INTERNET` / `GET_NETWORK_INFO`(normal) | AI 网络必需 |
-| **GenOffice 应用集** | `READ_WRITE_USER_FILE` + `READ_WRITE_{DOWNLOAD,DOCUMENTS,DESKTOP}_DIRECTORY` + `FILE_ACCESS_PERSIST` | 打开/保存/另存/文件关联 |
-| | `READ_PASTEBOARD` / `PRINT` / `GET_FILE_ICON` / `RUNNING_LOCK` / `PREPARE_APP_TERMINATE` | 粘贴 / 打印(system_grant 即得) / Home 图标 / 长转换防休眠 / 退出清理(杀 sidecar) |
-| **显式裁剪** | `LOAD_INDEPENDENT_LIBRARY` | 不声明;POC-4 实测静态 sidecar 无需它(M3 做 CLI 生态时再申请,API 22+ 普通应用可申请) |
-| | `ACCESS_USER_FULL_DISK` | M1 不申请(沙箱 + picker 够用);M2 视产品需要 |
-| | 浮窗/置顶/隐私窗/cert/传感器/相机/定位/蓝牙全家 | VSCodium 特有,全裁 |
+| **Electron 运行时** | `kernel.ALLOW_WRITABLE_CODE_MEMORY`（唯一 kernel ACL） | V8 JIT 的 W^X 内存页 |
+| | `INTERNET` / `GET_NETWORK_INFO` | AI 与网络功能 |
+| **应用集（system_grant）** | `GET_FILE_ICON` / `RUNNING_LOCK` / `PREPARE_APP_TERMINATE` / `FILE_ACCESS_PERSIST` / `PRINT` | Home 图标 / 长转换防休眠 / 退出清理（杀 sidecar）/ 授权持久化 / 打印 |
+| **ACL（user_grant，须运行时申请）** | `READ_PASTEBOARD` + `READ_WRITE_{DOCUMENTS,DOWNLOAD,DESKTOP}_DIRECTORY` | 剪贴板读取 + 三目录直读 |
+| **显式裁剪，不申请** | `CUSTOM_SANDBOX` / `ALLOW_EXTERNAL_NATIVE_CODE` / `WEB_NATIVE_MESSAGING` / `READ_WRITE_USER_FILE` / `ACCESS_USER_FULL_DISK` / 浮窗·置顶·隐私窗·cert·传感器·相机·定位·蓝牙全家 | 前两条分别由 shim 的 `disable-renderer-sandbox` 与"零 napi 模块"取代；后两条沙箱 + picker 够用；其余是参考工程特有 |
 
-## 5. 实施计划
+> ACL 的 user_grant 要点：声明 + profile 覆盖只给"申请资格"，还须在窗口就绪后走
+> `requestPermissionsFromUser`。只声明不申请时写用户目录会 EPERM。`build-ohos.sh` 会校验
+> 必需声明齐全、并拦截未获批权限出现。详见 `PERMISSIONS_ACL.md`。
 
-### M0:POC 排险(2~4 周,全部真机闭环)
+## 5. 依赖治理
 
-| POC | 内容 | 状态 |
-|---|---|---|
-| POC-1 | AGC 发布侧权限申请提交(`ALLOW_WRITABLE_CODE_MEMORY` 等);审批与开发并行 | 待启动(应 M0 第一天发出) |
-| **POC-2** | 本机 Linux `electron@37` 跑完整 GenOffice,产出 43→37 断点清单(typecheck + build + 六模块冒烟) | **✅ 完成(含全仓测试):类型/构建/测试三层 electron 相关断点 = 0**(typecheck+build 25 包;测试 23 包 17 直接过、6 失败全定性为环境缺件/root 假失败/jsdom 差异;运行时行为差异待 POC-3 真机)。报告 `poc2-breakage-report.md` |
-| POC-0/3 | 搬 web_engine HAR + entry 骨架,空 Electron app 真机点亮;继而 GenOffice shell 真机点亮(shim + `genoffice-app://` + IPC 样例) | **✅ 真机点亮(2026-09-20,2in1 真机 / API 26)**:完整进程树(:GPU×2/:NetworkService/:Renderer);shim-log 全链打点;自检 9 项 8 PASS 1 预期降级;详见 §9 真机实测记录 |
-| POC-4 | `cargo build --target aarch64-unknown-linux-ohos`(+crt-static)编 xlsx-sidecar → executableBinaryPaths 注册 → spawn 跑通 `read_range`;**验收:HAP 不含 LOAD_INDEPENDENT_LIBRARY** | **✅ 真机闭环(2026-09-20)**:spawn 存活、exec 放行(XPM/executableBinaryPaths 实证);HAP 不含 LOAD_INDEPENDENT_LIBRARY(trim 已固化) |
-| POC-5 | pdfium.wasm 在 fork Node 主进程 init + 打开中文 PDF;hb-subset/harfbuzz 同验 | **✅ 真机 spot check(2026-09-20)**:pdfium.wasm 在真机 JIT/W^X 下 init+LoadMemDocument+页数+文本提取全通 |
-| POC-6 | CJK 字体:docs 内嵌 woff2 + slides 字体表 OH 版,视觉对比桌面版 | 待启动 |
-| POC-7 | printToPDF / 菜单 / titleBarOverlay / 单实例 / IME 逐项摸底 → fork 能力缺口矩阵 | 待启动 |
+第三方依赖一律以 submodule 引入 `thirdparty/`，固定 tag/commit。
 
-### M1:PC 版可用(1~2 月)
-**状态(2026-09-20):主体进壳首亮成功(G0-G3,见 §11);剩 G4 逐模块验收 / G5 smoke / G6 收尾,表见 `docs/M1_ACCEPTANCE.md`。**
-Electron 37 适配(依 POC-2 清单)/ 文件打开保存另存 + 文件关联 / 打印 / 构建链固化(`scripts/ohos/*`,set -eo pipefail + 产物断言 + 毁灭性重建演练)/ 验收体系(启动参数门控 + 沙箱日志 + smoke 回归,替代不可用的 Playwright-Electron)。
-
-### M2:产品化(1~2 月)
-触屏/平板适配 / 多窗口验证 / 崩溃治理(crash-hook + dlclose 规避)/ 性能 / 签名上架合规(Apache-2.0 + third-party notices)/ 依赖治理(submodule,见 §5.1)。
-
-### 5.1 依赖治理(submodule)
-
-第三方依赖一律以 submodule 引入 `thirdparty/`,固定 tag/commit,**不引用 `.temp/` 临时素材**:
-
-| 依赖 | remote(fork) | release tag | 说明 |
+| 依赖 | remote(fork) | 锚点 | 说明 |
 |---|---|---|---|
-| GenOffice 本体 | `github.com/hackeris/genoffice` | **`ohos-v1.0.0`** @ `339470d` | 上游 `genspark-ai/genoffice` 无推送权;tag = 上游 316ded6 + 9 文件 electron pin(43.3.0→37.2.0) |
-| electron 本体 | `github.com/hackeris/electron` | **`ohos-v37.2.0`** @ `3af8ccb` | **引擎件正式来源**;tag = 官方 fork 分支 `electron-v37.2.0-openharmony` HEAD。产物 = fork 构建输出 `src/out/musl_64`,经 sync-engine.sh 组装 web_engine HAR |
+| GenOffice 本体 | `github.com/hackeris/genoffice` | 分支 `ohos/sota-debrand` @ `a1acf05`（**尚无 tag**） | 上游无推送权，故自建 fork。`ohos-v1.0.0` @ `339470d` 是上游基线锚点（上游 316ded6 + 9 文件 electron pin） |
+| electron 本体 | `github.com/hackeris/electron` | tag **`ohos-v37.2.0`** @ `3af8ccb` | **引擎件正式来源**；tag = 官方 fork 分支 `electron-v37.2.0-openharmony` HEAD。产物 = fork 构建输出 `src/out/musl_64`，经 `sync-engine.sh` 组装进 `web_engine/` |
 
-> tag 已在本仓 submodule 本地创建(`git -C thirdparty/<x> describe --tags --exact-match` 校验),fork 推送时随分支一并推 tag;完整操作见 `thirdparty/VERSIONS.md`。
-
-- 构建脚本消费 `thirdparty/` 路径:`build-genoffice.sh` 默认 `--src thirdparty/genoffice`;`sync-engine.sh` 默认源 `thirdparty/engine-ref`(过渡),产物就绪后换 `[产物目录]` 参数
-- **web_engine 适配层已自有化入本仓**(2026-09-22,用户定):`web_engine/` 的 ets/cpp 适配层、`module.json5`、资源串入库由 git 管理,仅忽略引擎二进制(libs 177M/resfile 18M/build);`sync-engine.sh` 只组装二进制、**绝不覆盖源码**;权限声明直接维护在 `web_engine/src/main/module.json5`(原 `web-engine-permissions.trim` 已固化删除,build-ohos.sh 改为校验必需声明+拦截未获批权限)
-- **产物来源规范(用户定 2026-09-22)**:任何构建产物,要么是本项目主体代码,要么作为三方依赖在 `thirdparty/` 维护。对照表:
+**产物来源规范**：任何构建产物，要么是本项目主体代码，要么作为三方依赖在 `thirdparty/` 维护。
 
 | 产物 | 来源 | 归属 |
 |---|---|---|
-| GenOffice app 产物(七 out/renderer、preload、main bundle) | `thirdparty/genoffice` 构建(`npm run build:all`) | 三方依赖 |
-| 引擎 so(libelectron/libadapter/libffmpeg)+ resfile 资源 | `thirdparty/electron` 构建产物(过渡期从 engine-ref 取同构件) | 三方依赖 |
-| electron/node/node.c 启动器 | 同上 | 三方依赖 |
-| `xlsx-sidecar` | `thirdparty/genoffice` Rust 源码交叉编译(build-genoffice.sh 自动触发) | 三方依赖 |
+| 应用产物（六模块 renderer/preload、主进程 bundle） | `thirdparty/genoffice` 构建（`npm run build:all`） | 三方依赖 |
+| 引擎 so + resfile 资源 | `sync-engine.sh` 组装，默认源 `.temp/engine-ref`（不入库，同构件） | 三方依赖 |
+| electron / node 启动器 | 同上 | 三方依赖 |
+| `xlsx-sidecar` | `thirdparty/genoffice` 的 Rust 源码交叉编译（`build-genoffice.sh` 自动触发） | 三方依赖 |
 | `pdfium.wasm` / `hb-subset.wasm` | `thirdparty/genoffice` 的 npm 依赖产物 | 三方依赖 |
-| `libc++_shared.so` | OHOS SDK(`native/llvm/lib/aarch64-linux-ohos`,官方指导来源) | 系统工具链 |
-| `dev_config.json`(9333 调试开关) | `sync-engine.sh` 生成 | 本项目 |
+| `libc++_shared.so` | OHOS SDK | 系统工具链 |
+| `dev_config.json`（9333 调试开关） | `sync-engine.sh` 生成 | 本项目 |
 | web_engine 适配层 / shim / 自检 app | 本仓 git | 本项目 |
 
-> `xlsx-sidecar` 交叉编译三坑(cargo 1.98 stable,实测 2026-09-22):①`CC_aarch64_unknown_linux_ohos` 给 cc crate 编 C 依赖(ironcalc→旧 zip→bzip2-sys/zstd-sys);②linker 须显式指 NDK clang,否则系统 ld 报 "Relocations in generic ELF";③`linker-flavor` 只能用稳定值 `gcc`(clang/gnu-cc 均 unstable)。
-- `thirdparty/engine-ref`(不入库)= 集成方式参考源,仅作过渡期二进制来源与集成参考,**其二进制产物不得作为交付来源**(过渡期例外,见上)
-- 首次克隆:`git submodule update --init`(需 fork 已推送对应分支);electron 源仓含 LFS 文件,克隆时 `GIT_LFS_SKIP_SMUDGE=1` 跳过(仅构建 electron 本体时需要真实内容)
+**web_engine 适配层已自有化入本仓**（`web_engine/` 的 ets/cpp 适配层、`module.json5`、资源串由 git 管理，只忽略引擎二进制）。`sync-engine.sh` 只组装二进制，**绝不覆盖源码**。
 
-### M3(可选)
-MCP/CLI 生态(fork 上 `ELECTRON_RUN_AS_NODE` 已被 hos_vscodium 验证;届时补申请 LOAD_INDEPENDENT_LIBRARY)/ 手机形态再评估。
+**首次克隆**：`GIT_LFS_SKIP_SMUDGE=1 git submodule update --init`——electron 源仓含 LFS 文件，跳过 smudge 才拿到真实内容（仅构建 electron 本体时需要）。
 
-## 6. 风险清单
+> `xlsx-sidecar` 交叉编译三坑（cargo 1.98 stable）：①`CC_aarch64_unknown_linux_ohos` 给
+> cc crate 编 C 依赖（ironcalc → 旧 zip → bzip2-sys/zstd-sys）；②linker 须显式指 NDK clang，
+> 否则系统 ld 报 "Relocations in generic ELF"；③`linker-flavor` 只能用稳定值 `gcc`。
 
-| # | 风险 | 状态/应对 |
-|---|---|---|
-| R1 | kernel ACL 获取 | **已解除**(D4:用户确认可得;调试证书原生支持) |
-| R2 | Electron 43→37 断面 | **已解除(静态层)**:POC-2 实测 typecheck/build 零断点;残余=运行时行为差异,归入 POC-3 真机验证 |
-| R3 | 文件系统模型冲突(绝对路径 + 同目录写 + 递归 watch vs 沙箱 + URI) | M1 收敛沙箱文档目录;folder-tree/watch 降级轮询或裁剪 |
-| R4 | fork 引擎级缺陷(IME 个别场景 / 退出 dlclose 崩溃 / `media(hover:none)` 隐藏 UI) | 逐项绕行 + CSS 条件样式;crash-hook 定位 |
-| R5 | HAP 体积(libelectron 170MB + 资源,估 400~600MB) | M1 量化;compressNativeLibs=false 的安装体积实测 |
-| R6 | 字体保真三角(度量读文件 vs Chromium 按名解析)OHOS 偏差 | POC-6 视觉基线;内嵌字体优先 |
-| R7 | 测试网重建(51 个 Playwright-Electron spec 不可用) | M1 smoke 体系;引擎包 vitest 单测原样保留 |
+## 6. 关键方案
 
-## 7. 环境与资产地图
+### 6.1 窗口装饰与系统三键
 
-| 资产 | 位置 | 用途 |
-|---|---|---|
-| **本工程(正式仓)** | **本仓库根**(git;`.temp/` 仅放临时研究素材,用户定的纪律) | Electron-OHOS 壳工程 + 文档 + 一键构建链 |
-| 应用源码 | `.temp/genoffice` | 移植对象(临时副本,保持干净) |
-| POC-2 工作区 | `.temp/genoffice-e37` | electron@37 适配清点(临时素材,不入库) |
-| 官方指导项目克隆 | `.temp/ohos-sig-electron`(3.3G) | 官方文档/API 矩阵来源(临时素材) |
-| 运行时底座参考源 | `.temp/hos_vscodium` | web_engine HAR + entry 骨架 + shim/napi-dyn/签名脚本,整体搬用(sync-engine.sh 源) |
-| 多实例参考工程 | 本机另一工程 | 多实例姿势实证参考(launchType multiton) |
-| 移植方法论参考工程 | 本机另一工程 | 交叉编译工具链(core3d/ohos-arm64.toolchain.cmake)、deploy/验收链、文档方法论 |
-| OHOS SDK | `<OHOS-SDK>`(6.1.0,API 23) | NDK(sysroot/clang)、ets、toolchains(hdc) |
-| 构建容器 | 容器启动脚本(docker ubuntu:26.04 + command-line-tools) | hvigor/ohpm 构建环境 |
-| 签名材料 | 本机签名材料目录 | 调试证书(跨项目共享目录) |
-| Rust OHOS | `rustup target add aarch64-unknown-linux-ohos`(ohos.rs;OHOS_NDK_HOME 指向上述 SDK) | sidecar 交叉编译 |
+无边框窗口（`titleBarStyle:hidden`）本该靠 `setTitleBarOverlay` 绘制系统窗口按钮，但 fork 不支持该 API——应用会变成一个没有关闭入口的窗口。
 
-## 8. 附录
+**做法是保留系统装饰、隐藏标题栏**：entry 侧 `setWindowDecorVisible(false)` 让应用内容延展到窗口顶部、三键悬浮右上角；`setWindowDecorHeight(40)` 与 tab 条等高；`setTitleAndDockHoverShown(false,false)` 禁掉 hover 浮出。
 
-- `appendix/A-genoffice-architecture.md` —— GenOffice 架构与平台耦合点分析(四档分类)
-- `appendix/B-pure-office-methodology.md` —— Pure Office 移植方法论(B 路线全套资产与经验)
-- `appendix/C-hos-vscodium-runtime.md` —— hos_vscodium / Electron-OHOS 运行时工程细节(复用清单)
+**一个必须绕的坑**：web_engine 在 loadContent 回调里设过装饰，但**随后 Chromium 创建平台窗口（`OhosToplevelWindow`）会把它重置**，真机上装饰不出现。ArkTS 侧没有"平台窗口就绪"事件可挂，所以用 800/1500/3000ms **幂等多次重试**覆盖。
 
----
-## 9. 工程落地记录(2026-09-19)
+### 6.2 三键避让
 
-**鸿蒙工程骨架已搭建并构建通过**(阶段 1,POC-0 地基):
+桌面 Electron 用 CSS 的 `env(titlebar-area-*)` 把窗口按钮区的位置交给应用（WCO），应用据此在右上角留空间。**OHOS 引擎不提供这个变量**，应用算出来的避让宽度恒为 0，标题栏右侧的图标就和系统三键重叠。
 
-- 位置:本仓库根,参考另一工程的结构;
-- 包名/签名:**复用调试档的 `app.fuqidian.magicflow` + 本机签名材料目录下的 `default_MagicFlow_*` 材料**(复用条件:bundleName 与证书一致;未来独立上架时换正式包名重新生成材料);
-- 构建:**当前环境即构建容器**(hvigorw 与 SDK 由容器提供,无需另起 docker);
-- 一键构建:`scripts/build-ohos.sh`(`set -eo pipefail` + HAP 存在/大小/module.json 断言),产物 `entry/build/default/outputs/default/entry-default-signed.hap`(219KB,12 files,SignHap 通过);
-- 模板纪律:`build-profile.json5`(含签名,gitignore)/ `build-profile.json5.template`(无签名,入库),同 office;
-- 当前 entry 为最小骨架(deviceTypes tablet/2in1,无权限声明、无文件关联——待 POC-0 后与能力同步上线)。
+**机制补位**：entry 侧监听 `windowTitleButtonRectChange`，把结果落盘 `title-button-rect.json`；shim **桩⑮** 读文件后注入等效 CSS 给 `.tab-bar-caption-spacer`，2 秒重读一次，窗口缩放或按钮显隐变化后能自愈。
 
-**POC-0 下一步**:搬 hos_vscodium `web_engine/` HAR + entry 改 Electron 壳(WebAbility/AbilityStage/CustomChildProcess + executableBinaryPaths + main-shim),装真机点亮空 Electron 窗口。
+> 校验链（真机实测）：系统三键行容器宽 265 物理 = 139.5 CSS px ↔ 注入值 140px；
+> 容器左边界 2585 物理 → 相对窗口内容 1220.5 CSS px ↔ CDP 实查 spacer `x:1220`。
+> 实现上的一个妥协：那个文件里 `right` 和 `width` 的语义（是否都表示距窗口右缘）不明确，
+> 代码取两者中较大的兜底。
 
-**POC-0 自检 HAP 已构建完成(2026-09-19,"就差真机安装")**:
-- **形态**:按用户决策先做"验证最小功能集合"——不是空窗口,而是**一页自检 app**(frameless + 自定义 scheme `genoffice-app://` + Tray),把 POC-3/4/5 真机疑点压缩为一次真机会话:
-  - 自动项 A1-A10:rawPlatform/单实例裸调行为/app.getPath 全家/clipboard 往返/printToPDF/WCO 打桩/spawn xlsx-sidecar(executableBinaryPaths+XPM 放行)/wasm pdfium 全链(POC-5 spot check)/Tray/nativeImage;
-  - 人工观察:三键缺失(官方已知)/托盘/中文 IME(L2.2 最大变数)/中文字体;
-  - 结果写 shim-log(/data/storage/el2/base/files/shim-log.txt)+ 9333 远程调试通道(dev_config.json 已入包)。
-- **三脚本一键链**(可复现,毁灭性演练已通过:rm web_engine+oh_modules+build 产物+build-profile 从零全绿):
-  1. `scripts/sync-engine.sh`——web_engine HAR(193MB)整体同步 + entry libs 必需件(electron/node 启动器、libc++_shared、dev_config.json;bash/zsh/rg/.node 别名已按清单 §11 筛除);
-  2. `scripts/build-app.sh`——自检 app 资产(sidecar 断言 aarch64 静态无 INTERP、pdfium wasm、icon);
-  3. `scripts/build-ohos.sh`——ohpm install → template+签名注入(node 文本替换,snippet gitignore)→ hvigor assembleHap → **18 关键件内容断言**(so×3/启动器×2/sidecar/dev_config/resfile 资源/app 五件套,libelectron>100MB 防 LFS 指针)。
-- **产物**:`entry-default-signed.hap` 220,715,186 bytes(39 files),MagicFlow 调试签名(SignHap 通过——**web_engine 38 条权限含 kernel ACL 均过签名**,说明该调试证书 profile 覆盖 ACL,POC 阶段无阻塞)。
-- **entry 壳**:MyAbilityStage/EntryAbility/BrowserAbility/StatelessAbility(+TaskManager/StatusBar/BrowserEmbedded)+ CustomChildProcess(toString 注册)+ pages 8 件 + ability 三件套命名(kAbilityMap 约束)+ multiAppMode 三件套,清单 §2/§3 十二步全落实。
-- **演练抓到的缺口(已修)**:①hvigor 不自动 ohpm install(Cannot find module 'web_engine' 22 连错)→ 固化进脚本;②template 落后(缺 web_engine 注册)→ OhmUrl 15 连错 → 重建 template+签名注入机制;③签名口令只存在 build-profile.json5 里,rm 后险些丢失 → .signing.snippet(gitignore)单点保存。
-- **真机步骤**(等设备):`hdc app install entry-default-signed.hap`(9568332 先 bm uninstall)→ 桌面开 GenOffice → 自检页"全部运行" → 逐项记录;IME/三键/托盘人工勾选;`hdc fport tcp:9333` 连 Playwright/DevTools;崩溃看 shim-log + hilog(包名/APPSPAWN 定位法,清单 §7)。
+### 6.3 文件关联
 
-## 10. 真机实测记录(2026-09-20,2in1 真机 / API 26)
-
-**POC-0/3/4/5 一次闭环:自检 HAP 安装、点亮、CDP 远程自检全部完成。**
-
-### 10.1 自检结果(9 项:8 PASS + 1 预期降级)
-
-| 项 | 结果 | 实测结论 |
-|---|---|---|
-| 装载链 | ✅ | 完整进程树:主进程 + `:GPU`×2 + `:NetworkService` + `:Renderer`;shim-log 全链打点(main-shim 六件事 → main.mjs loaded → app ready) |
-| A1 probe | ✅ | **`process.platform` 原始值 = `openharmony`**(shim 打桩必要性的实证);electron 37.2.0 / chrome 138.0.7204.45 / node 22.17.0 |
-| A2 单实例 | ✅ | **`requestSingleInstanceLock()` 实际返回 true**(官方 API 矩阵标"不支持"过于悲观——API 存在且工作;shim 恒 true 打桩与系统行为一致,无双实例风险,multiton 下多开是能力不是问题) |
-| A3 路径 | ✅ | home/downloads/documents/desktop 落 `/storage/Users/currentUser/*`(**系统真实用户目录**,非深沙箱——比预期更好,打开/保存对话框体验将接近桌面);userData=`/data/storage/el2/base/files`;execPath=`/system/bin/appspawn`(fork 痕迹);osType()=`HarmonyOS` |
-| A4 clipboard | 🟡 降级 | writeText 后 readText 为空——**READ_PASTEBOARD 权限被裁的预期后果**;readImage 不崩。登记 M1 ACL 申请(用户确认:影响不大,先登记) |
-| A5 printToPDF | ✅ | **485KB PDF,头 `%PDF-1.4`**——Chromium 打印管线全通(导出 PDF 可用;调系统打印机的 PrintAdapter 另属 TODO 半成品) |
-| A6 WCO | ✅ | 三 API 打桩后调用不抛(shim 生效) |
-| A7 sidecar | ✅ | **spawn 存活 3s 静默退出无错** = executableBinaryPaths 注册 + XPM 放行 + stdio 通路全通(POC-4 真机闭环) |
-| A8 wasm | ✅ | **pdfium.wasm init + LoadMemDocument + pageCount=1 + 文本提取"Hello GenOffice OHOS"**(JIT W^X 内存真机工作;坚盾模式未开启) |
-| A9/A10 | ✅ | Tray 存在;nativeImage 1024×1024 解码 |
-| 渲染 | ✅ | CDP 截图确认:自检页完整渲染、**中文字体正常无豆腐块**、frameless + 自绘标题栏 + `genoffice-app://` scheme 加载 |
-| 9333 通道 | ✅ | dev_config.json 生效,`hdc fport` + CDP `/json/list` + WebSocket 远程执行全通——**e2e 测试网可重建**(Playwright connectOverCDP 就绪) |
-
-### 10.2 真机暴露并已修的问题(踩坑实录)
-
-| # | 问题 | 症状/证据 | 修复 |
-|---|---|---|---|
-| T1 | **ACL 权限安装拦截** | `9568289 grant request permissions failed`:ACCESS_USER_FULL_DISK → READ_PASTEBOARD 逐条被拒(MagicFlow 调试证书 profile 的 ACL 覆盖有限;**kernel.ALLOW_WRITABLE_CODE_MEMORY 经 definePermissions 声明被放行**) | web_engine 权限 38→8 条 trim(M1 期);2026-09-22 适配层自有化后,权限直接维护 `web_engine/src/main/module.json5`(当前 12 条),build-ohos.sh 改为构建前校验 |
-| T2 | **multiAppMode 不被承认** | `launchType:"specified"` 启动被拒:hilog `[ability_util.h340] Not support multi-instance` → StartAbilityError:-1(API 26 普通应用无"应用多开"资质) | 参考 wineohos 实证:**删 multiAppMode,launchType 改 `multiton`**(标准 ability 多实例) |
-| T3 | 隐式启动匹配失败 | `aa start -b <bundle>` 报 2097199(implicit start;skills 匹配不上) | 显式 `-a EntryAbility` 启动成功;**桌面图标点击是否正常待用户确认**(走 home action 语义,待验),M1 修 skills |
-| T4 | trim 检测特征踩坑 | 首版脚本用裸权限名 `ACCESS_BIOMETRIC` 检测原始版,撞上 trim 注释里的已删权限名,误报"重放失败" | 改用带引号完整声明串 `"ohos.permission.ACCESS_BIOMETRIC"` 检测 |
-
-### 10.3 权限最终态(8 条)与 M1 ACL 申请清单
-
-保留:kernel.ALLOW_WRITABLE_CODE_MEMORY(✅ 放行)、INTERNET、GET_NETWORK_INFO、RUNNING_LOCK、PREPARE_APP_TERMINATE、FILE_ACCESS_PERSIST、GET_FILE_ICON、PRINT。
-**M1 ACL 申请清单**(真机实测被拒,申请后加回):READ_PASTEBOARD(剪贴板读取,办公核心)、READ_WRITE_{DOWNLOAD,DOCUMENTS,DESKTOP}_DIRECTORY(三目录直读,当前走 picker)。
-
-### 10.4 人工观察项(✅ 用户已确认,2026-09-20)
-
-- 系统三键:frameless 无三键——符合官方已知行为 ✅;
-- 托盘图标、中文 IME 输入、中文字体渲染——**全部符合,已勾选** ✅。
-- (POC 自检 app 的观察结论;GenOffice 本体的同项人工验证在 G4 逐模块验收中复确认。)
-
-**要素清单调研完成(2026-09-19)**:`docs/ELECTRON_OHOS_CHECKLIST.md` v2 定稿——
-- **[官]** openharmony-sig/electron 官方指导项目(克隆 `.temp/ohos-sig-electron`):13 件套产物清单、ACL 权限全集、托盘强绑定窗口、首窗口 metadata、HNP 方案、坚盾模式禁 JIT/wasm、`@electron-ohos/electron-builder`、1294 API 支持矩阵交叉验证(printToPDF/WebContentsView/protocol/dialog ✅;requestSingleInstanceLock/second-instance/setTitleBarOverlay ❌→shim 打桩);
-- **[实]** hos_vscodium 逐文件逆向(125 工具调用,含 so 字符串验证):collectAllLibs 语义、arm64-v8a→运行期 `/data/storage/el1/bundle/libs/arm64` 路径规则、CustomChildProcess.toString() 注册机制(白屏最易漏点)、kAbilityMap 按名 startAbility、dev_config.json 硬编码位置(9333 e2e 通道)、PrintAdapter TODO、GenOffice 筛除项(bash/zsh/rg、.node 别名、napi-dyn)。
-- 新风险入册:坚盾守护模式下 wasm 全禁(pdfium 三件套失效,M1 需检测降级)。
-
----
-
-## 11. M1 主体进壳工程记录(2026-09-20,G0-G3 首亮成功)
-
-**里程碑:GenOffice(electron@37 分支)真实构建产物已装入 HAP 并在真机完整点亮**——Home 页全中文渲染、六模块 renderer(Sheets 实证 Univer)在线、9333 CDP 全程可用、6 进程树稳定。
-
-### 11.1 G0:构建源固化(.temp/genoffice)
-
-- 开 `ohos/electron37` 分支:pin electron 37.2.0(7 个 apps package.json + 根 package.json + lock,共 9 文件);pin diff 固化 `scripts/patches/genoffice-e37-pin.patch`(`git apply --check` 于干净 main 通过);分支纪律=只 cherry-pick 不 merge;
-- `npm ci` 踩坑(重现):electron postinstall 直连 GitHub 超时 → 绕法 = `npm ci --ignore-scripts` + `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ node node_modules/electron/install.js`;
-- build 前置:cargo 须在 PATH(`~/.cargo/bin`——sheets 的 `native:build` 会调,缺则 code 127);
-- `npm run build:all` 全绿(顺序 docs→sheets→slides→pdf→markdown→html→cli→shell)。产物实测:docs 27M / sheets 39M / slides 19M / pdf 9.6M / markdown 12M / html 8.5M / shell 19M。
-
-### 11.2 G1:产物管线(`scripts/build-genoffice.sh`)
-
-- 布局(与 resourcesPath 读取点对齐):`resfile/resources/{app(out/main+chunks 菜单PNG+preload×3+renderer), modules/<m>/{preload,renderer}, wasm/{pdfium,hb-subset}.wasm}`;
-- 死重裁剪:modules/*/out/main(standalone bundle,28.6M)、cli/(40M)、gsk/ 不装(M3);**组装实测 109M**(app 19 + modules 85 + wasm 5.1,与勘探账表 110M 吻合);
-- 断言:main 字段 / bundle>5MB / 六模块 preload+renderer / 死重已裁 / wasm 魔数 `\0asm` / 无 symlink / 无 node_modules 无 .ts / 体积 60~150M 区间;
-- 踩坑:harfbuzzjs ≥1.x 源文件名 `harfbuzz-subset.wasm`,packaged 契约读 `hb-subset.wasm`(wasm-path.ts:37)→ 拷贝时改名;
-- `--selfcheck` A/B 排障通道:一键回 POC 自检已验证态(自检 app 源迁入 `scripts/selfcheck-app/`);旧 build-app.sh 退役。
-
-### 11.3 G2:main-shim v6(`scripts/shim/main-shim.mjs`)
-
-最终桩清单(顺序铁律:**全部在加载 out/main/index.js 之前**,bundle 顶层求值 resourcesPath/isPackaged):
-`platform='linux'` → `title 打桩` → `resourcesPath(天然正确即跳过)` → `HOME/XDG/TMPDIR+chdir(el2)` → `disable-renderer-sandbox` → `isPackaged 钉 true` → `documents 可写探测+降级 el2`(default-save-dir throw 点)→ `单实例恒 true` → `powerMonitor 吞异常` → `WCO 三 API` → `sidecar spawn 重映射(libs/arm64)` → `GO_SHIM_TRAY 预案` → `uncaught 先行` → `createRequire 加载 CJS bundle`。
-
-**两个首亮实测修正(推翻勘探假设)**:
-- `process.resourcesPath` fork 默认值**天然正确** = `/data/storage/el1/bundle/entry/resources/resfile/resources`(正是组装目录)——桩改为"已对即跳过";对该属性 defineProperty 疑似触发 native 异常,勿轻碰;
-- shim 前奏保持最小(仅 import fs/path):顶部 import node:url/node:module + 探针组合曾伴随 native 退出(未定论因果,最小化后消失)——排障期任何新桩回加都应逐桩打点。
-
-### 11.4 G3:首亮排障实录(三个真凶,均已固化进脚本注释)
-
-| # | 真凶 | 机制 | 修复 |
-|---|---|---|---|
-| 1 | **CJS/ESM 之坑** | `out/main/index.js` 是 electron-vite 产 **CJS bundle**;组装的 package.json 带 `"type":"module"` → ESM 语境解析 → `ReferenceError: exports is not defined in ES module scope` → shim catch 后主动 quit(表象="The browser process has exited") | package.json 去 type:module(.mjs 后缀天然 ESM 不受影响)+ bundle 经 `createRequire` 加载 |
-| 2 | **console 缓冲假象** | v1/v2 hilog 打点显示"死在 platform 桩",实为进程退出时 console 缓冲未 flush 的错觉,误导二分方向 | uncaughtException handler 先行 + **文件日志为准**(shim-log 双写 el2 文件 + console);真死点靠 v3 零桩直载实锤 |
-| 3 | **断言 SIGPIPE 误报** | `echo 大清单 \| grep -q`(命中即退)× `set -o pipefail` → 清单大(数百行)后随机误报"缺关键件"(每轮挂不同文件) | `unzip -l` 落盘后 grep 文件,无管道 |
-
-### 11.5 首亮结果(G4-0 提前通过)
-
-- HAP **327,739,021 bytes / 670 files**(mode=genoffice,31 件关键件断言全过);
-- 进程树 6 进程(主 + GPU + renderer×N)稳定;CDP `/json/list` 双 target;
-- Home(file://):`.home-hero` ✓ + `.quick-card`×7 ✓ + 全中文("晚上好。准备好开始了吗?");截图 `docs/appendix/m1-screenshots/g4-0-home.png`;
-- Sheets(genoffice-app://sheets):Univer 容器 + 中文工具栏完整("开始/插入/页面布局/公式/数据/审阅/视图 + Genspark AI");
-- 排障决策表七条未全用上——真凶 #1 不在任何预判里(CJS/ESM 形态问题),**零桩直载 + uncaught 同步落盘**的二分法是破局关键,已沉淀为标准动作。
-
-### 11.6 G4 排障实录(2026-09-21,两坑;shim v5/v6)
-
-真机人工操作发现、CDP 与 `uitest uiInput`(系统级输入注入)双轨定位:
-
-| # | 症状 | 真凶 | 定位关键 | 修复(shim 桩) |
-|---|---|---|---|---|
-| 4 | **输入死区**:docs 打开后 ribbon"插入~视图"选项卡触屏/鼠标点不动;CDP 合成输入(mouse/touch)全部正常 | **fork 上 hidden 的 WebContentsView 仍参与命中测试拦截输入**。shell 有 spare sheets view 常驻 hidden(tab-manager `scheduleSpareSheetsView`,且每开一个 sheets tab 3s 后重建);切走的 tab 也 hidden;且 `activateTab` 只 `setBounds` active view,**非 active view 的 bounds 冻结在创建时刻** | ①uitest 点文件按钮 ✓ 点插入~视图 ✗(CDP 全 ✓)→ 系统输入专属;②三个 view 挂 pointerdown 监听:活区事件正确抵达(clientX 映射无损),死区事件**凭空消失**;③`dumpLayout` 控件树坐标正常(渲染完好,非 UI 问题);④注意 CDP `Input.*` 走 Chromium 内部**不代表**真实输入链路,排障必须用 uitest/hidumper 级证据 | **桩⑬ parking**:1s 周期把 `getVisible()===false` 的 view `setBounds` 移出屏幕(-30000);activateTab 恢复时会重设 bounds 不冲突。真机验证:插入/审阅/开始/视图 uitest 点击全部切换 ✓ |
-| 5 | **剪贴板反复弹窗**:打开 pptx 反复弹"无法访问系统剪贴板" | slides renderer 在 **mount+每次窗口 focus** 时 `clipboardProbe` → 主进程 `clipboard.availableFormats()/readText()` → fork 走 `@ohos.pasteboard`,READ_PASTEBOARD 未授权(ACL trim)触发**系统提示弹窗**;弹窗关闭→焦点回归→再 probe→**死循环**(非定时轮询,focus 驱动) | 文案不在任何 i18n(系统级);slides 源码仅 probe 一处主动读剪贴板;READ_PASTEBOARD 在 M1 ACL 裁剪清单内(M1_ACCEPTANCE §4.2) | **桩⑭ 读侧静默**:`availableFormats/readText/readImage/readBuffer/...` 返回空(与 ACL 裁剪后降级语义一致,本就读不到内容),`writeText` 保留。真机验证:开 pptx + 6 轮 tab 切换(focus 反复触发 probe)零弹窗。**v2 补记(2026-09-22)**:曾改"自证式探测"(原生 readText 读回验证授权)——**未授权时原生调用本身即弹系统窗**,回归时 sheets 打开即弹(M1 已修问题复现);定稿=授权信号文件制(EntryAbility 写 `clip-perm.json` → shim 轮询,未获信号绝不碰原生读侧) |
-
-**方法论沉淀**:renderer 内 DOM 层一切正常时,用 **CDP 合成输入与系统输入(uitest)的差异**切分问题域;`hidumper -s WindowManagerService -a '-a'`(窗口树/坐标)、`uitest dumpLayout`(控件树+bounds)是真机 UI 排障的标准探针。
-
-**另录 fork 已知缺陷(G4 期间发现)**——**2026-09-23 逐条复核修正**(此前把分析期预判当成了实测结论,性质重新标注):
-
-| 项 | 复核结论 | 证据等级 |
-|---|---|---|
-| `dialog.showSaveDialog` 的 `defaultPath` 文件名不回填 | **断点不在"fork 没传"**:`file_dialog_ohos.cc:54-78` 传了 default_path 并做 path→URI 转换;断点在 adapter→系统 picker 的参数映射(预填文件名需 `newFileNames`,该层源码 libadapter 不可见) | 现象实测✓ / 根因部分定位 |
-| CDP `Page.printToPDF` 不存在 | **不是缺陷**:CDP `Page.printToPDF` 仅 headless 可用(Chromium 固有设计,有头 Chrome 同样报 "Printing is not available");标准 Electron 亦然。正道是 `webContents.printToPDF`(已用) | 特性边界(查证) |
-| `media(hover:none)` 全能力置空 | **实测确证**(2026-09-23 二次复验,数据一致):UA 声明为 PC,却 `hoverNone:true` + `pointerCoarse/Fine:false` + `anyPointer*:false` + `maxTouchPoints:0` + `ontouchstart:false`——**自相矛盾**。根因:**fork 的 Chromium 未向 Blink 上报设备能力**(设备枚举缺失);**输入事件链路本身正常**(uitest 系统点击可正常操作应用),故为能力上报缺失而非输入失效。影响:CSS 响应式分支选错(hover 才显示的 UI、触屏优化尺寸) | 实测确证✓ / 可回馈上游 |
-| 关 docs tab 走 teardown 不 close | 证据是 GenOffice 源码注释(`tab-manager.ts:597`:"reproduced consistently... looks like an upstream WebContentsView/Chromium issue")——**桌面 Electron 上的复现**。**2026-09-23 本机补证**:复验 dlclose 时对 renderer 调 `window.close()` → **Home 页面卡死、窗口不销毁、CDP 无响应**(白屏,二次复现确证)——同为"窗口/WebContents 销毁流程 wedge UI"风险域,fork 上确实存在该缺陷(本机实证;应用源码无 renderer 可达的 `window.close()`,正常使用不触发,故 teardown 绕行方案必要且保持) | 上游复现 + **本机同类实证**✓ |
-| 退出 dlclose 崩溃 | **本项目实测三重证伪**(来源为 MIGRATION_ISSUES 分析期预判,疑似继承旧经验):①force-stop 6 轮零崩溃零残留;②用户 Alt+F4 优雅退出 `Kill Reason: app exit` + `exit code: 0`;③**带脏数据对话框的退出**(编辑文档后 Alt+F4 → 弹"是否保存" → 操作确认)——**主进程+GPU+Renderer+Network 全部 `exit with code: 0`**,零崩溃。附:该路径同时验证 fork 上 `requestDocsClose` 的 dialog 流程**无 wedge**(fork 高危区) | **实测证伪**(三重路径干净) |
-| **(新发现)窗口无鼠标可达的关闭入口** | 无边框窗口(`titleBarStyle:hidden`)依赖 `setTitleBarOverlay` 绘制系统窗口按钮(`setWindowButtonVisibility/Position` 是 macOS 交通灯专用,Win/Linux 走 WCO)——fork 不支持该 API。**已解决(2026-09-23,系统装饰方案)**:`entry/EntryAbility` 隐藏标题栏、保留三键(`setWindowDecorVisible(false)` → 应用内容延展到窗口顶部、三键悬浮右上角;`setWindowDecorHeight(40)` 与 tab 条等高;`setTitleAndDockHoverShown(false,false)` 禁 hover 浮出)。**关键坑**:web_engine 在 loadContent 回调设过装饰(hideTitleBar 默认 false → true),但**随后 Chromium 创建平台窗口(OhosToplevelWindow)会重置**——真机实测装饰不出现,须在其后重设;ArkTS 侧无"平台窗口就绪"事件锚点,故用 800/1500/3000ms **幂等多次重试**覆盖。真机验证:三按钮出现,点关闭 → 优雅退出 `exit code 0` | **已修复✓(真机验证)** |
-| **(新发现)应用右上角控件与系统三键重叠** | 应用按桌面 WCO 的 CSS `env(titlebar-area-*)` 让出右上角(`shell/tabbar.css` 的 `.tab-bar-caption-spacer`,宽 = `calc(100vw - env(titlebar-area-x) - env(titlebar-area-width))`);**OHOS 引擎不提供该变量** → 回退值恒为 0 → 重叠。**修复(机制补位,不动引擎)**:entry 侧 `windowTitleButtonRectChange` 落文件 `title-button-rect.json` → shim **桩⑮** 注入等宽 CSS 到该 spacer(2s 周期重读,窗口/按钮变化自愈)。**实测校验链**:系统三键行容器 `containerModalButtonRowId` 宽 265 物理 = 139.5 CSS px ↔ 注入值 140px;容器左边界 2585 物理 → 相对窗口内容 1220.5 CSS px ↔ CDP 实查 spacer `x:1220`——吻合。**高度对齐**:`setWindowDecorHeight` 48→40 后,容器高 47.9→**40.0** CSS px、三键中心 23.9→**20.0** CSS px(= tab 条中心),即装饰高度与渲染内容一致 | **已修复✓(真机验证)** |
-
-### 11.7 剩余
-
-> 本节写于 M1 中期。所列项目**现已全部完成**,保留作记录;当前状态见 `M1_ACCEPTANCE.md`。
-
-- ~~**G4** 逐模块操作验收~~ —— 七级全绿;
-- ~~**G5** e2e smoke 七用例~~ —— 7/7 通过;
-- ~~**G6** 毁灭性重建演练~~ —— 三脚本全绿;
-- ~~ACL 权限真机回归~~ —— 2026-09-24 profile 到位,五件全通。
-
-### 11.8 包名/权限切终态(2026-09-23,M2)
-
-按"ACL 五件以 `app.fuqidian.sotaoffice` 名义申请、假设全获批"推进,代码层一次切到终态:
-
-| 项 | 变更 |
-|---|---|
-| 包名 | `AppScope/app.json5`:`app.fuqidian.magicflow`(借名调试) → **`app.fuqidian.sotaoffice`** |
-| 权限声明 | `web_engine/src/main/module.json5`:READ_PASTEBOARD + 三目录由注释恢复为声明(ACL 五件齐) |
-| 构建校验 | `scripts/build-ohos.sh`:四条由"调试态提示"升级为**必需**(缺失即 FATAL),与 JIT 合为五条必需 |
-| 签名 | MagicFlow 材料与 bundleName 强绑定,已移出为 `scripts/.signing.snippet.magicflow.bak`;当前产 **unsigned HAP** |
-
-验证:`bash scripts/build-ohos.sh` 全绿 → `entry-default-unsigned.hap`(326,844,130 B,669 files;较 signed 版少 ~1.7MB 签名块,且 SignHap 跳过 3s → 34ms)。profile 到位后写回 `scripts/.signing.snippet` 即恢复 signed 产(步骤见 `M1_ACCEPTANCE.md` §4.4)。
-
-### 11.9 文件关联(2026-09-23,M2)
-
-系统"打开方式"接入,三段链(声明 → 改道 → 消费):
+系统"打开方式"接入，三段链（声明 → 改道 → 消费）：
 
 | 段 | 位置 | 内容 |
 |---|---|---|
-| 声明 | `entry/src/main/module.json5` skills | 6 条 `{scheme:file, type:<UTD>, linkFeature:FileOpen}`:docx/xlsx/pptx(openxmlformats 系)、pdf(`com.adobe.pdf`)、md(`general.markdown`)、html(`general.html`) |
-| 改道 | `entry/EntryAbility.applyOpenDocument` | `want.uri` → `fileUri.FileUri(uri).path` → `cmdArgs`,并**清空 `startUri`**——引擎 initParameters 会把 want.uri 当 startUri(网页应用场景)误用 |
-| 消费 | 引擎 `CommandLineAdapter.appendArgs` → Chromium argv → 应用 `supportedFileIn(process.argv)` → `openDocumentPath` | 应用侧**原生支持** argv 路径入口,零改 GenOffice 源码 |
+| 声明 | `entry/src/main/module.json5` 的 skills | 6 条 `{scheme:file, type:<UTD>, linkFeature:FileOpen}`：docx/xlsx/pptx（openxmlformats 系）、pdf（`com.adobe.pdf`）、md（`general.markdown`）、html（`general.html`） |
+| 改道 | `EntryAbility.applyOpenDocument` | `want.uri` → `fileUri.FileUri(uri).path` → `cmdArgs`，并**清空 `startUri`**（引擎的 initParameters 会把 want.uri 当 startUri 用于网页应用场景，误留着会导航错） |
+| 消费 | 引擎 `CommandLineAdapter.appendArgs` → Chromium argv → 应用 `supportedFileIn(process.argv)` → `openDocumentPath` | 应用侧原生支持 argv 路径入口，**零改上游源码** |
 
-要点:①`linkFeature:"FileOpen"` 必填、大小写敏感,`scheme` 固定 `file`;②UTD 名取 `@ohos.data.uniformTypeDescriptor` 预置表——docx/xlsx/pptx 用 openxmlformats 系(`com.microsoft.word.doc` 是旧 doc 格式,勿混);③应用侧 `supportedFileIn` 要求**路径真实存在**(existsSync)且扩展名匹配 → 必须转真实路径(非 URI);④多实例(launchType=multiton)下每次打开是新实例,无 onNewWant 热路径。
-**实测结果(2026-09-24,sotaoffice + SotaOffice profile)**:
-- **冷启动 ✓**(主场景):`aa start -U <file uri>` → CDP target `未命名的文档.docx | genoffice-app://docs/...`,
-  全链路走通(want.uri → 真实路径 → cmdArgs → Chromium argv → 应用 `supportedFileIn` → `openDocumentPath`);
-  路径可读性无问题(三目录 ACL + 系统对 want.uri 的授权叠加)。
-- **热启动 ✓(2026-09-24 修复,真机验证)**:原缺口——应用已运行时再打开文件会出**白窗口**
-  (multiton 新建 Ability 实例 → 引擎令已有 Electron 进程开新窗口,内容却取被清空的 `startUri`)。
-  修法三段:①`launchType` multiton → **singleton**(回归应用本来的单实例设计);②`EntryAbility.onNewWant`
-  写 `open-doc.json`(运行时无 cmdArgs 注入通道);③shim **桩⑰** 轮询信号,经**应用自带 control-server**
-  (`control.sock` + `control.json` 里的 token,`open` 命令直连 `openDocumentPath`)在现有窗口打开文档
-  ——**零改上游源码**。真机验证:热启动后单窗口、文档在现有窗口打开、hilog 见 `open-document(hot)`。
+要点：
+
+- `linkFeature:"FileOpen"` 必填且大小写敏感，`scheme` 固定 `file`；
+- UTD 名取 `@ohos.data.uniformTypeDescriptor` 预置表——docx/xlsx/pptx 用 openxmlformats 系（`com.microsoft.word.doc` 是旧 doc 格式，别混）；
+- 应用侧 `supportedFileIn` 要求**路径真实存在**且扩展名匹配，所以必须转成真实路径而不是 URI。
+
+**热启动**（应用已在运行时再打开一个文件）走这条链，跨三个组件：
+
+```
+系统复用 Ability 实例(launchType=singleton,走 onNewWant)
+      ↓  EntryAbility 写 open-doc.json(含 path 和 seq)
+shim 桩⑰ 每 1.5 秒轮询信号文件
+      ↓  读 <userData>/control.json 拿 token 与 socket 端点
+连 control.sock,发 {token, request: {cmd:'open', path}}
+      ↓
+应用自带的 control-server 在现有窗口打开文档
+```
+
+任一层改都会断链，这是目前跨组件最多的机制。见 `SHIM_INTERNALS.md` 的「热启动」。
+
+## 7. 风险
+
+| # | 风险 | 状态 |
+|---|---|---|
+| R3 | 文件系统模型冲突（绝对路径 + 同目录写 + 递归 watch vs 沙箱 + URI） | 沙箱文档目录已收敛；folder-tree/watch 用轮询或裁剪 |
+| R4 | fork 引擎缺陷 | 逐项绕行 + CSS 条件样式；见 `UPSTREAM_FEEDBACK.md`（窗口销毁流程 wedge、设备能力上报缺失等） |
+| R5 | HAP 体积（libelectron 177MB + 资源） | 当前约 328MB；上架前与商店单包上限核对 |
+| R6 | 字体保真（度量读文件 vs Chromium 按名解析的偏差） | 视觉基线未启动；倾向内嵌字体 |
+| R7 | 测试网重建（上游 51 个 Playwright-Electron spec 不可用） | 已有 `scripts/e2e/ohos-smoke.mjs` 七用例；引擎包 vitest 单测原样保留 |
+
+## 8. 环境与资产
+
+| 资产 | 位置 | 用途 |
+|---|---|---|
+| **本工程（正式仓）** | 本仓库根（`.temp/` 只放临时研究素材） | Electron-OHOS 壳工程 + 文档 + 构建链 |
+| 应用源码 | `thirdparty/genoffice`（submodule） | 移植对象 |
+| 引擎集成参考源 | `.temp/engine-ref`（不入库） | 布局同构的参考 + `sync-engine.sh` 的默认取源地 |
+| 官方指导项目克隆 | `.temp/ohos-sig-electron`（不入库） | 官方文档与 API 矩阵来源 |
+| OHOS SDK | `<OHOS-SDK>`（6.1.0） | NDK（sysroot/clang）、ets、toolchains（hdc） |
+| 签名材料 | 本机签名材料目录（跨项目共享） | 调试证书 |
+| Rust OHOS target | `rustup target add aarch64-unknown-linux-ohos` | sidecar 交叉编译 |
+
+## 9. 附录
+
+- `appendix/A-genoffice-architecture.md` —— 上游应用的架构与平台耦合点分析
+- `appendix/B-pure-office-methodology.md` —— ArkTS 路线的方法论（B 路线的全套资产与经验）
+- `appendix/C-hos-vscodium-runtime.md` —— Electron-OHOS 运行时工程细节（复用清单）

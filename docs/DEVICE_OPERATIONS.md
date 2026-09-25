@@ -2,7 +2,7 @@
 
 应用装到真机之后，怎么取证、怎么看日志、怎么判断问题出在哪儿。
 
-## 三个取证手段
+## 四个取证手段
 
 **先拿证据再动手改代码**。真机上的问题，靠猜十次不如截一张图。
 
@@ -110,12 +110,12 @@ bash scripts/grant-acl.sh <device>
 
 ### 白窗口
 
-历史上出现过两个白窗口问题，成因完全不同：
+两个白窗口问题的成因完全不同：
 
 - **初次启动全白**：三个易漏点——`nativeLib.collectAllLibs` 没开、`CustomChildProcess.toString()`
   注册被删、`runBrowser` 没在 XComponent 的 onLoad 里调。见 `ELECTRON_OHOS_CHECKLIST.md` §2。
 - **热启动白窗口**：运行中再打开一个文件，窗口是白的。已经通过 onNewWant 写信号文件、
-  shim 轮询后经 control.sock 发命令解决，见 `PORT_DESIGN.md` §11.9。
+  shim 轮询后经 control.sock 发命令解决，见 `PORT_DESIGN.md` §6.3。
 
 ### 输入没反应
 
@@ -127,7 +127,7 @@ docs 的 ribbon 区域对鼠标和触屏都无响应，而 CDP 合成输入正�
 
 slides 在 mount 和 focus 时会探测剪贴板，在没授权的情况下会触发系统弹窗，
 弹窗关闭后又 focus → 再次探测，形成死循环。现在的做法是**没拿到授权信号就绝不碰读侧**，
-详见 `PORT_DESIGN.md` §11.6。
+详见 `PORT_DESIGN.md` §6.1、§6.2。
 
 ## 坐标备忘
 
