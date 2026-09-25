@@ -13,7 +13,7 @@
 | 要改兼容层（shim） | **`SHIM_INTERNALS.md`** |
 | 想查某个坑是不是踩过 | **`PITFALLS.md`** |
 | 想知道还有什么没做完 | **`OPEN_ITEMS.md`** |
-| 要做发布前的去上游化改造 | `SOTA_RELEASE_TODO.md` |
+| 要做发布前的去上游化改造 | `SOTA_RELEASE_TODO.md`（执行清单）+ `SOTA_DECISIONS.md`（为什么这么选） |
 | 要给 Electron fork 提 issue | `UPSTREAM_FEEDBACK.md` |
 | 想知道某段移植决策怎么来的 | `PORT_DESIGN.md` §0～§6 |
 
@@ -38,7 +38,7 @@
 | **打印** | ★`M2_VERIFY_CHECKLIST.md` §D1、`UPSTREAM_FEEDBACK.md` #5、`MIGRATION_ISSUES.md` L2.3 | 结论一致，落地判据在 M2 |
 | **fork 已知缺陷** | ★`UPSTREAM_FEEDBACK.md`、`PORT_DESIGN.md` §11.6、`ELECTRON_OHOS_CHECKLIST.md` 附 C | 缺陷状态几处不一致，以 UPSTREAM_FEEDBACK 为准 |
 | **原生二进制** | ★`MIGRATION_ISSUES.md` L6、`PORT_DESIGN.md` §5.1 | Rust sidecar 交叉编译配方、wasm 预验 |
-| **发布改造** | ★`SOTA_RELEASE_TODO.md` | |
+| **发布改造** | ★`SOTA_RELEASE_TODO.md`（清单）、`SOTA_DECISIONS.md`（决策依据） | |
 | **字体与视觉基线** | ★`MIGRATION_ISSUES.md` L7、`appendix/A` §7 | 尚未启动，无真机数据 |
 
 ## 已经修掉的文档问题
@@ -71,7 +71,7 @@
 | --- | --- |
 | **操作手册**（随工程更新） | `BUILD_AND_DEPLOY.md`、`DEVICE_OPERATIONS.md`、`PERMISSIONS_ACL.md`、`SHIM_INTERNALS.md` |
 | **横向登记**（随工程更新） | `PITFALLS.md`、`OPEN_ITEMS.md` |
-| **活文档**（随工程更新） | `PORT_DESIGN.md`、`M2_VERIFY_CHECKLIST.md`、`SOTA_RELEASE_TODO.md`、`thirdparty/VERSIONS.md` |
+| **活文档**（随工程更新） | `PORT_DESIGN.md`、`M2_VERIFY_CHECKLIST.md`、`SOTA_RELEASE_TODO.md`、`SOTA_DECISIONS.md`、`thirdparty/VERSIONS.md` |
 | **验收记录**（完成后归档，不再改） | `M1_ACCEPTANCE.md` |
 | **快照**（某个时点的分析，故意不更新） | `poc2-breakage-report.md`、`appendix/A`、`MIGRATION_ISSUES.md` |
 | **对外材料** | `UPSTREAM_FEEDBACK.md`（面向 fork 维护方） |

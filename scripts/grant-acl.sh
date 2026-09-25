@@ -2,12 +2,11 @@
 # grant-acl.sh —— 装机后 ACL 三连授权(文档/下载/桌面)+ 生效核验
 #
 # 正确命令: bash scripts/grant-acl.sh [device]
-# 正确目录: /data/share/smartoffice 仓库根(脚本内部自行定位)
+# 正确目录: 仓库根(脚本内部自行定位)
 # 前提:     应用已安装;源码侧三条 user_grant ACL 见
 #           entry/src/main/ets/entryability/EntryAbility.ets:214-220
-# 判据:     ① 点击循环结束后重启应用,shim 日志三条均报
-#              "系统目录可写"(出现 "降级 → el2" 即该条未生效)
-#           ② 桌面出现 probe.* 探针文件(桩⑱ 生成成功 = 有写权)
+# 判据:     点击循环结束后重启应用,shim 日志三条均报
+#           "系统目录可写"(出现 "降级 → el2" 即该条未生效)
 #
 # 背景(2026-09-24 实测,勿按旧经验误判):
 #   * 三条 ACL 是 user_grant:声明+profile 只给"申请资格",装机后首次启动会弹
@@ -21,7 +20,7 @@
 #     "全部标签"按钮点开。
 set -eo pipefail
 
-DEV="${1:-192.168.1.5:44959}"
+DEV="${1:?用法: bash scripts/grant-acl.sh <device>}"
 BUNDLE="app.fuqidian.sotaoffice"
 TMPD=/data/local/tmp
 MAXCLICK="${MAXCLICK:-6}"
@@ -77,8 +76,8 @@ hdc -t "$DEV" shell "aa start -a EntryAbility -b $BUNDLE" >/dev/null
 sleep 18
 
 echo "==> 核验:三目录落点"
-hdc -t "$DEV" shell "tail -40 $SHIM_LOG" | grep -E "documents:|downloads:|desktop:|test-files:" || true
-echo "    期望:最新一次启动的三条均 '系统目录可写';桩⑱ 报 '已生成 probe.*' 或 '均存在,跳过' 均可"
+hdc -t "$DEV" shell "tail -40 $SHIM_LOG" | grep -E "documents:|downloads:|desktop:" || true
+echo "    期望:最新一次启动的三条均 '系统目录可写'"
 echo "    注:上文若同时出现 '降级 → el2' 与 '系统目录可写',降级属**授权前**那一轮启动,以时间戳最新的一段为准"
 echo "    (勿用 hdc ls 核验桌面:shell 对 /storage/Users 是命名空间隔离,一律看不到)"
 echo "    若最新一段仍 '降级 → el2',说明该条授权未生效——重跑本脚本并核对弹框序号(1/3~3/3)"

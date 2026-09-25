@@ -3,29 +3,7 @@
 这份文档是**登记处**：但凡"知道要做但还没做"的事都记在这里，做完就划掉。
 不记在这里的，说明要么已闭环，要么根本没人知道——后一种情况请补进来。
 
-## 一、代码里明确标着"发布前移除"的
-
-### 桩⑱ 真机测试文件生成
-
-`scripts/shim/main-shim.mjs` 里注释写着"B2-B6 文件关联抽验专用；发布前移除"。
-它往桌面写七个探针文件（md/html/txt/pdf/docx/xlsx/pptx），是文件关联抽验的前提——
-因为 hdc 侧根本写不进公共目录，只能让应用自己造。
-
-**影响**：一个办公软件往用户桌面塞七个 `probe.*` 文件，发布版不能留着。
-**做法**：移除桩，或至少默认设为关闭（现在可用 `GO_TEST_FILES=0` 关）。
-
-### 桩⑲ 退出诊断
-
-同样标着"发布前移除"。只做一件事：把退出链上每个事件（`window-all-closed`、
-`before-quit`、`will-quit`、`quit`、`process exit`）打进日志。
-
-**影响**：纯噪音，但无害。它当初是为了区分"窗口全关触发的默认退出"和"应用主动 quit"。
-**做法**：和桩⑱ 一起移除。移除前记得写进 `PITFALLS.md`——它记录的那个
-"bundle 加载成功却 15 秒退出"的现象还没最终定论。
-
-> 这两项在源码里只是注释，**没有任何清单追踪**。这份文档就是那个清单。
-
-## 二、配置与元数据没收尾
+## 一、配置与元数据没收尾
 
 ### `vendor` 还是占位符
 
@@ -58,7 +36,19 @@ EntryAbility、BrowserAbility、StatelessAbility）。
 没讲这几个名字的收敛规则。
 **做法**：定一条规则写进 `CLAUDE.md`，避免新人反复问。
 
-## 三、机制上没验证过的
+### About 页的第三方声明没生成
+
+`THIRD-PARTY-NOTICES.txt` 当前不存在。构建时会提示：
+
+```
+提示: 无 THIRD-PARTY-NOTICES.txt(跑 npm run notices 生成;About 页缺失,不阻塞)
+```
+
+**影响**：About 对话框里看不到第三方声明。不阻塞运行，但上架合规需要它。
+**做法**：在应用仓库里跑 `npm run notices`，产物是 `apps/shell/build/THIRD-PARTY-NOTICES.txt`，
+`build-genoffice.sh` 会自动拷进 resfile。
+
+## 二、机制上没验证过的
 
 这些在 `MIGRATION_ISSUES.md` 里被标记过，但**全仓找不到任何后续验证记录**。
 
@@ -80,7 +70,7 @@ EntryAbility、BrowserAbility、StatelessAbility）。
 
 **做法**：先量 `系统字体目录是否可读`、`CJK 字体名与度量`，再决定要不要内嵌字体。
 
-## 四、文档本身的债
+## 三、文档本身的债
 
 ### 承诺过但没写的文档
 
@@ -105,7 +95,7 @@ EntryAbility、BrowserAbility、StatelessAbility）。
 见 `README.md` 的「读之前先知道」一节，那里列了五处。已经在索引里做预警，
 但没有逐处修正。
 
-## 五、仓库风险
+## 四、仓库风险
 
 ### submodule 的 fetch 源指向 `.temp/`
 
@@ -122,7 +112,7 @@ EntryAbility、BrowserAbility、StatelessAbility）。
 
 **做法**：把分支推到 fork 上，然后 `git submodule sync`。这是当前最该先处理的一件事。
 
-## 六、发布相关
+## 五、发布相关
 
 ### 体积
 

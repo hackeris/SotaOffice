@@ -29,6 +29,8 @@ build-ohos.sh         权限校验 → ohpm → hvigor → 打包 HAP
 - **Rust 交叉编译 target**：`aarch64-unknown-linux-ohos`，编译 xlsx sidecar 用。
 - **submodule 初始化**：应用产物仓库带 Git LFS 文件，克隆时要跳过 smudge，
   否则拉下来的是指针（详见故障表第 12 条）。
+- **一台 2in1 形态的真机**：应用声明了 `executableBinaryPaths`，**平板装不上**
+  （报 `9568449`）。这是安装期校验，跟包本身没关系，详见故障表。
 
 ```sh
 GIT_LFS_SKIP_SMUDGE=1 git submodule update --init
@@ -98,6 +100,9 @@ bash scripts/build-ohos.sh [--no-sign]
 
 产物在 `entry/build/default/outputs/default/` 下，签名的叫 `entry-default-signed.hap`。
 
+脚本会**自动识别组装形态**：看应用主 bundle 在不在，在就是 GenOffice 版、体积阈值 300MB；
+不在就是自检版、阈值 100MB。两种模式的阈值不同，所以自检模式不会被误判成"构建失败"。
+
 - **没有签名材料就产 unsigned HAP，装不上真机**。签名材料从 `scripts/.signing.snippet`
   注入，缺了会自动降级并提示。相关的材料清单见 `PERMISSIONS_ACL.md`。
 - **`hvigor` 不会自动装依赖**，脚本里显式调了 `ohpm install`。手动跑 hvigor 时报
@@ -154,6 +159,7 @@ bash scripts/m1-rebuild-drill.sh
 | 应用界面全白 | 三个易漏点：`nativeLib.collectAllLibs` 没开、`CustomChildProcess.toString()` 被删、`runBrowser` 没在 XComponent 的 onLoad 里调 | 对照 `ELECTRON_OHOS_CHECKLIST.md` §2 |
 | 装机报 `9568289` | 声明了受限权限，但签名 profile 没覆盖 | 见 `PERMISSIONS_ACL.md` |
 | 装机报 `9568332` | 已有同名应用 | `bm uninstall` 后再装 |
+| 装机报 `9568449`（`check bin file failed`） | **设备是平板**。应用声明了 `executableBinaryPaths`，而这类应用只有 PC/2in1 形态支持安装 | 换 2in1 设备。官方给的另一条路是把 `compressNativeLibs` 改成 `true`，但那与应用要求可执行文件直接 exec 的前提冲突，未验证 |
 | 装上了但白屏 | `libelectron.so` 可能是 LFS 指针，只有约 130 字节 | 构建期有 `>100MB` 断言拦截；检查克隆时是否跳过了 smudge |
 | 组装时随机报"缺关键件"，每轮挂的文件还不一样 | 管道里 `echo` 大清单配合 `grep -q` 触发 SIGPIPE | 清单落盘再 grep（脚本里已修） |
 | 应用起不来，日志停在某个桩 | 主进程 bundle 被当成 ESM 解析了 | `app/package.json` 不能带 `type: module` |
@@ -170,7 +176,6 @@ bash scripts/m1-rebuild-drill.sh
 | `build-ohos.sh` | `--no-sign` | 产 unsigned HAP |
 | | `--regen` | 强制重建 `build-profile.json5` |
 | `poc2-breakage-scan.sh` | `--with-smoke` | 额外跑无头冒烟 |
-| `shim` | `GO_TEST_FILES=0` | 关掉桩⑱ 的探针文件生成 |
-| | `GO_SHIM_TRAY=1` | 兜底托盘 |
+| `shim` | `GO_SHIM_TRAY=1` | 兜底托盘 |
 
 `e2e/ohos-smoke.mjs` 可以只跑单个用例，把 suite 名当参数传。
