@@ -10,9 +10,11 @@
 #
 # 背景(2026-09-24 实测,勿按旧经验误判):
 #   * 三条 ACL 是 user_grant:声明+profile 只给"申请资格",装机后首次启动会弹
-#     系统模态授权框(1/3 文档 → 2/3 下载 → 3/3 桌面)。**超时或拒绝后应用会
-#     走到 window-all-closed 静默退出**(退出码 0、无 uncaughtException、无
-#     renderer 进程)——现象酷似崩溃,实为未授权硬门槛。
+#     系统模态授权框(1/3 文档 → 2/3 下载 → 3/3 桌面)。弹框时机为「主界面加载
+#     完成 +2s」(2026-09-26 改:启动即弹会盖在白屏上拖慢首屏;EntryAbility 轮询
+#     Electron 落的 ui-ready 标记)。**超时或拒绝后应用会走到 window-all-closed
+#     静默退出**(退出码 0、无 uncaughtException、无 renderer 进程)——现象酷似
+#     崩溃,实为未授权硬门槛。
 #   * 卸载重装会清空已授予的授权,故每次重装后都要跑本脚本。
 #   * 系统授权框是 ArkUI 弹窗,在无障碍树中可见可点;而 Electron 应用窗口的
 #     系统标题栏三键**不在**树里(应用 DOM 在树里)。因此授权框用坐标点其
@@ -31,17 +33,10 @@ hdc list targets 2>/dev/null | grep -q "$DEV" || { echo "FATAL: 设备 $DEV 不�
 
 # 注:hdc shell 不传递远端退出码,故用输出计数判断,不能用 if hdc shell ... grep -q
 NPROC=$(hdc -t "$DEV" shell "ps -ef | grep [s]otaoffice | wc -l" | tr -d '\r ')
-if [ "${NPROC:-0}" -eq 0 ]; then
-  echo "应用未运行,拉起(等 15s 到弹框)…"
-  hdc -t "$DEV" shell "aa start -a EntryAbility -b $BUNDLE" >/dev/null
-  sleep 15
-fi
-
-clicked=0
-for _ in $(seq 1 "$MAXCLICK"); do
+find_allow() {
   hdc -t "$DEV" shell "uitest dumpLayout -p $TMPD/acl.json" >/dev/null 2>&1 || true
   hdc -t "$DEV" file recv "$TMPD/acl.json" /tmp/acl-layout.json >/dev/null 2>&1 || true
-  POS=$(python3 - /tmp/acl-layout.json <<'PY'
+  python3 - /tmp/acl-layout.json <<'PY'
 import json, re, sys
 try:
     node = json.load(open(sys.argv[1]))
@@ -60,7 +55,22 @@ walk(node)
 if hit:
     print(*hit[-1])
 PY
-)
+}
+
+if [ "${NPROC:-0}" -eq 0 ]; then
+  echo "应用未运行,拉起(弹框已改为「主界面加载完+2s」后才出现,最长等 90s)…"
+  hdc -t "$DEV" shell "aa start -a EntryAbility -b $BUNDLE" >/dev/null
+  POS=""
+  for _ in $(seq 1 30); do
+    sleep 3
+    POS=$(find_allow)
+    [ -n "$POS" ] && break
+  done
+fi
+
+clicked=0
+for _ in $(seq 1 "$MAXCLICK"); do
+  POS=$(find_allow)
   [ -n "$POS" ] || { echo "无授权框(已授权或未弹出),跳过"; break; }
   echo "点击 '允许' @ $POS"
   hdc -t "$DEV" shell "uitest uiInput click $POS" >/dev/null 2>&1 || true

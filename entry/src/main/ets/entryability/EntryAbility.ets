@@ -225,10 +225,41 @@ export default class EntryAbility extends WebAbility {
     }
   }
 
+  // 弹框时机:主界面加载完成后延迟 2s 再申请。启动即弹会盖在未加载的白屏上,
+  // 拖慢首屏(2026-09-26 实测)。主界面就绪的信号由 Electron 主进程落标记文件
+  // (index.ts 主窗口 did-finish-load → ui-ready);此处先删旧标记(避免吃到
+  // 上一次启动遗留),再 500ms 轮询,最长 60s;超时跳过本轮申请(未授权走
+  // shim 降级 el2 的既有兜底,下次启动再弹)。
+  private static readonly UI_READY_FILE: string = '/data/storage/el2/base/files/ui-ready';
+
+  private pollUiReadyAndRequestStorage(attempt: number): void {
+    let ready = false;
+    try {
+      fs.accessSync(EntryAbility.UI_READY_FILE);
+      ready = true;
+    } catch (e) {
+      ready = false;
+    }
+    if (ready) {
+      setTimeout(() => this.requestStoragePermissions(), 2000);
+      return;
+    }
+    if (attempt >= 120) {
+      console.warn('ui-ready 未出现(60s),本轮跳过三目录申请');
+      return;
+    }
+    setTimeout(() => this.pollUiReadyAndRequestStorage(attempt + 1), 500);
+  }
+
   onWindowStageCreate(windowStage: window.WindowStage) {
     super.onWindowStageCreate(windowStage);
     this.requestClipboardPermission();
-    this.requestStoragePermissions();
+    try {
+      fs.unlinkSync(EntryAbility.UI_READY_FILE);
+    } catch (e) {
+      // 首启本就无此文件
+    }
+    this.pollUiReadyAndRequestStorage(0);
     this.enableSystemDecor(windowStage);
     try {
       this.updateTitleButtonRect(windowStage.getMainWindowSync());
