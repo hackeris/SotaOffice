@@ -7,11 +7,15 @@
 #          + entry/libs/arm64-v8a 启动器(electron/node/libc++_shared.so/dev_config.json)
 # 用法:    引擎产物有更新(版本升级)后重跑本脚本再构建
 #
-# 【来源】默认取 .temp/engine-ref(引擎集成方式的参考源,布局同构;不入库)。
-# 引擎产物的正式来源 = thirdparty/electron(electron 本体 fork,分支
-# electron-v37.2.0-openharmony)的构建产物(src/out/musl_64:libelectron.so/
-# libffmpeg.so/libadapter.so/electron/icudtl.dat/v8_context_snapshot.bin/
-# resources.pak/locales 等,见其 README「输出结果」节)。
+# 【来源】.temp/engine-ref 不入库,clone 带不来,需要时自己拉:
+#   git clone https://atomgit.com/nanqube/hos_vscodium-opensource.git .temp/engine-ref
+# 它是 VSCodium 的鸿蒙移植仓,装的正是 electron-v37.2.0-openharmony 这份运行时,
+# 目录布局与官方 README「输出结果」节一致,可直接取用。
+#
+# 另一条路是自己编译 thirdparty/electron(分支 electron-v37.2.0-openharmony,跑它
+# 自带的 electron_build.sh,需拉 Chromium 138 源码,耗时长),产物落在 src/out/musl_64:
+# libelectron.so / libffmpeg.so / libadapter.so / electron / icudtl.dat /
+# v8_context_snapshot.bin / resources.pak / locales 等。
 #
 # 【不改动】web_engine 的 ets/cpp 适配层与 module.json5 已自有化入本仓(git 管理),
 # 本脚本只组装二进制,绝不覆盖源码——改动适配层请直接改 web_engine/ 下文件。

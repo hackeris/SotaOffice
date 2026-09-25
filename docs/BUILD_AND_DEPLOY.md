@@ -27,7 +27,8 @@ build-ohos.sh         权限校验 → ohpm → hvigor → 打包 HAP
 - **应用产物仓库**：`thirdparty/genoffice`（submodule）。它自己的构建产物是这一步的输入，
   首次要先进去 `npm ci` 加 `npm run build:all`。详见「第二步」。
 - **引擎二进制来源**：`sync-engine.sh` 默认从 `.temp/engine-ref` 取。**它不入库**，
-  clone 带不来——**没有这个目录，构建第一步就挂**。
+  clone 带不来——**没有这个目录，构建第一步就挂**。怎么拿到（clone 命令、或自己编译
+  `thirdparty/electron` 那条路），见 `sync-engine.sh` 头注释的【来源】节。
 - **Rust 交叉编译 target**：`aarch64-unknown-linux-ohos`，编译 xlsx sidecar 用。
 - **submodule 初始化**：应用产物仓库带 Git LFS 文件，克隆时要跳过 smudge，
   否则拉下来的是指针（详见故障表第 12 条）。

@@ -82,6 +82,14 @@ M2 已定案（见 `M2_VERIFY_CHECKLIST.md` §D1）：fork 的 `webContents.prin
 
 ## 四、发布相关
 
+### 引擎产物依赖第三方仓库
+
+`sync-engine.sh` 取的 `.temp/engine-ref` 是从 `atomgit.com/nanqube/hos_vscodium-opensource`
+clone 的。那是别人维护的仓，**不可控**——仓一旦消失或布局变动，构建链第一环就断。
+
+**做法**：要么把这份产物归档到自有仓库，要么走自编译路径（拉 Chromium 138 源码，
+耗时长）。当前先依赖它，获取命令写在 `sync-engine.sh` 头注释。
+
 ### 体积
 
 HAP 三百多兆，而应用商店对单包体积有上限（具体数值待确认）。
