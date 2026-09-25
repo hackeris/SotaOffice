@@ -53,7 +53,7 @@
 | `nativeContext.runBrowser(argv)` 调用链 | **必需** | XComponent onLoad | 触发 appspawn fork `electron` | 进程树不出现 electron |
 | `--bundle-installation-dir=` 参数 | **必需** | runBrowser argv | 指向 `getContext().resourceDir`,Electron 靠它定位 resfile | Electron 找不到资源目录,启动失败 |
 | `executableBinaryPaths` | **必需**(可执行体系①) | module.json5 module 级 | 注册 `libs/arm64-v8a/{electron,node,xlsx-sidecar}` | **XPM 拦截:exec 报 signature info failed** |
-| deviceTypes | **必需** | module.json5 | `["tablet","2in1"]`(fork web_engine 支持面;无 phone) | 装不上目标设备 |
+| deviceTypes | **必需** | module.json5(entry + web_engine HAR 两处) | `["2in1"]`(仅 PC;平板装不了 executableBinaryPaths 应用,HNP 平板不支持,手机不在 fork 支持面) | 装不上目标设备 |
 | 权限声明 | **必需** | module.json5 `requestPermissions` | 见 §4 | 安装/运行时报权限缺失 |
 | 首窗口尺寸 | 按需 | module.json5 abilities[].metadata | `ohos.ability.window.{width,height,left,top}`(left/top 可 `center`) | 首窗口尺寸不可控(默认值) |
 | `launchType` | **重要** | module.json5 abilities[] | 单/多实例语义:EntryAbility 用 `singleton`(应用本身按单实例设计,热启动走 onNewWant);StatelessAbility 等仍为 `multiton` | 与 JS 侧单实例逻辑不一致 |

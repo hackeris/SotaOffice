@@ -12,9 +12,9 @@
     "srcEntry": "./ets/Application/AbilityStage.ets",
     "description": "$string:module_desc",
     "mainElement": "EntryAbility",
-    // 路线 A 目标形态:PC(2in1)优先 + 平板(与 fork web_engine HAR 的 deviceTypes 对齐;
-    // fork 当前不支持 phone——见 PORT_DESIGN D2)
-    "deviceTypes": ["tablet", "2in1"],
+    // 仅 2in1:executableBinaryPaths 应用平板拒装(9568449),HNP 平板不支持——
+    // 平板路线整体关门(见 PORT_DESIGN D2);fork 本就不支持 phone
+    "deviceTypes": ["2in1"],
     "executableBinaryPaths": [
       { "path": "libs/arm64-v8a/electron" },
       { "path": "libs/arm64-v8a/node" },

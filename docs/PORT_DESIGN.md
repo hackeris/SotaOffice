@@ -9,7 +9,7 @@
 | # | 决策 | 依据 |
 |---|---|---|
 | D1 | **路线 A：Electron-on-OHOS**——用 openharmony-sig 维护的 Electron fork（`v37.2.0-openharmony`，Chromium 138 + Node 22.17）当运行时，应用产物原样装入 HAP | GenOffice 是"重 Node 主进程"应用（419 个 `ipcMain.handle` + 4 个自定义 scheme + printToPDF + WebContentsView + 内嵌 HTTP 服务），ArkTS 壳重写是**人年级**成本，换运行时是人月级 |
-| D2 | **PC(2in1) 优先**；fork 的 `web_engine` HAR `deviceTypes` 仅 `["tablet","2in1"]`，**手机不在支持面** | fork 的窗口层面向大屏；手机若要做需另行评估 |
+| D2 | **仅 PC(2in1)**；`deviceTypes` 两处声明均为 `["2in1"]`，**手机、平板均不在支持面** | fork 的窗口层面向大屏（手机不在 fork 支持面）；平板拒装 `executableBinaryPaths` 应用（9568449），HNP 平板又不支持，平板路线关门（详见 PITFALLS「平板装不上」） |
 | D3 | **版本策略：应用降级适配 Electron 37**（不去升级 fork 到 43） | 升级 fork 等于自编译 Chromium（>200G 磁盘、>32G 内存） |
 | D4 | 发布侧 kernel ACL 目标**仅 1 条**：`kernel.ALLOW_WRITABLE_CODE_MEMORY` | V8 JIT 的 W^X 内存页，是 Electron 运行时的唯一硬需求；场景对口官方定义"自带引擎的即时编译" |
 | D5 | `kernel.LOAD_INDEPENDENT_LIBRARY` **不申请** | 它是参考工程内置 CLI 工具（bash/zsh/rg）的需求，不是 Electron 运行时需求——`libelectron.so` 走 HAP 的 so 签名体系装载。将来做 CLI 生态时再评估 |

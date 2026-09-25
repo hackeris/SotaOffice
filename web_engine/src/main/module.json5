@@ -3,7 +3,6 @@
     "name": "web_engine",
     "type": "har",
     "deviceTypes": [
-      "tablet",
       "2in1"
     ],
     // [GenOffice trim 2026-09-20] VSCodium 38 条 → 12 条(VSCodium 特有权限不带)。

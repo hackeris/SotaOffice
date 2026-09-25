@@ -122,8 +122,8 @@ HAP 结构也完整（zip 校验通过），但设备就是拒绝安装。
 
 **做法**：换 2in1 设备。这是硬约束，不是配置写错。
 
-> 注意 `web_engine` 的 `deviceTypes` 里是 `["tablet", "2in1"]`，看起来平板也支持——
-> 那个声明管的是"HAR 能被哪些形态的设备加载"，管不了安装期的可执行文件校验。
+> 补充：HNP 包（`executableBinaryPaths` 的官方替代路线）平板也不支持——两条路都断，
+> 平板已从支持面移除，`deviceTypes`（entry 与 web_engine HAR 两处）均收敛为 `["2in1"]`。
 
 ## 权限与签名
 
