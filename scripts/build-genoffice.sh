@@ -77,13 +77,20 @@ if [ "$MODE" = "genoffice" ]; then
   # package.json 不带 "type":"module":out/main/index.js 是 electron-vite 产的 CJS bundle,
   # type:module 会令其在 ESM 语境解析 → "exports is not defined"(2026-09-20 首亮实锤);
   # main-shim.mjs 靠 .mjs 后缀天然 ESM,不受包级 type 影响。
+  # version 取 HAP 的 versionName(AppScope/app.json5),不用上游 shell 的 version——
+  # app.getVersion() 读的就是这份拷贝件,设置「关于」须跟随 HAP 版本;app.json5 带注释,
+  # 不是合法 JSON,用 sed 抽值而非 require。
+  HAP_VER=$(sed -n 's/.*"versionName"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' AppScope/app.json5 | head -1)
+  [ -n "$HAP_VER" ] || { echo "FATAL: AppScope/app.json5 读不到 versionName" >&2; exit 1; }
   node -e '
-    const v = require(process.argv[1] + "/apps/shell/package.json").version;
     require("fs").writeFileSync(process.argv[2], JSON.stringify({
-      name: "genoffice", version: v, description: "GenOffice on HarmonyOS(Electron 37 fork)",
+      name: "sotaoffice", version: process.argv[3],
+      description: "Sota Office on HarmonyOS(Electron 37 fork)",
       main: "./main-shim.mjs",
     }, null, 2) + "\n");
-  ' "$SRC" "$RES_DIR/app/package.json"
+  ' "$SRC" "$RES_DIR/app/package.json" "$HAP_VER"
+  grep -q "\"version\": \"$HAP_VER\"" "$RES_DIR/app/package.json" \
+    || { echo "FATAL: package.json 版本未写入(HAP versionName=$HAP_VER)" >&2; exit 1; }
   cp -f scripts/shim/main-shim.mjs "$RES_DIR/app/main-shim.mjs"
   cp -a "$SRC/apps/shell/out" "$RES_DIR/app/out"
   # modules/:只取 preload+renderer(裁掉 out/main 死重 28.6M——standalone bundle,shell 模式不用)

@@ -28,7 +28,7 @@ const LOG = '/data/storage/el2/base/files/shim-log.txt'
 const EL2 = '/data/storage/el2/base/files'
 // 日志三路:①沙箱文件(hdc 读不到) ②公共 Documents(仅三目录 ACL 到位才写成功——
 // 既当日志通道,也是**ACL 生效的实证**) ③console→hilog(会被 flowcontrol 丢)
-const LOG_PUBLIC = '/storage/Users/currentUser/Documents/GenOffice/shim-log.txt'
+const LOG_PUBLIC = '/storage/Users/currentUser/Documents/Sota Office/shim-log.txt'
 const log = (m) => {
   const line = `${new Date().toISOString()} ${m}\n`
   for (const p of [LOG, LOG_PUBLIC]) {
@@ -110,11 +110,11 @@ log(`stub: app.isPackaged(raw=${PROBES.rawIsPackaged} → ${app.isPackaged})`)
 // ---- ⑦ 系统目录(documents/downloads/desktop)可写探测 + 降级 ----
 // 三目录 ACL 到手后系统目录天然可写(探测通过则不干预);未到手时写入抛错会让
 // 保存链断裂,故逐个探测并把不可写的 setPath 降级到 el2(功能不中断)。
-// documents 多探一层 GenOffice 子目录——应用的文件落点在那里。
+// documents 多探一层 Sota Office 子目录——应用的文件落点在那里。
 PROBES.paths = {}
 PROBES.pathWritable = {}
 for (const [name, sub, fb] of [
-  ['documents', 'GenOffice', 'Documents'],
+  ['documents', 'Sota Office', 'Documents'],
   ['downloads', '', 'Download'],
   ['desktop', '', 'Desktop'],
 ]) {

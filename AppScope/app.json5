@@ -2,7 +2,7 @@
   "app": {
     // 正式包名(ACL 五件以此名义在 AGC 申请;其调试 profile 到位前,构建产 unsigned HAP)
     "bundleName": "app.fuqidian.sotaoffice",
-    "vendor": "example",
+    "vendor": "Fuqidian",
     "versionCode": 1000000,
     "versionName": "0.1.0",
     "icon": "$media:layered_image",
