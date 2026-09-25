@@ -44,6 +44,8 @@ const SIDECAR_RUNTIME = '/data/storage/el1/bundle/libs/arm64/xlsx-sidecar' // �
 
 PROBES.rawPlatform = process.platform
 log(`probe: rawPlatform=${PROBES.rawPlatform}`)
+// ② 会把 process.platform 钉成 'linux';真实系统名经 env 留给 UI 展示(关于对话框)
+process.env.SOTA_RUNTIME_OS = String(PROBES.rawPlatform)
 
 // uncaught 先行(任何后续异常同步落日志;console 退出前可能丢缓冲,文件为准)
 process.on('uncaughtException', (e) => { log(`uncaughtException: ${e?.stack || e}`) })
