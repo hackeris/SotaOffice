@@ -7,7 +7,7 @@
 | 目录 | 依赖 | 当前 commit | 锚点 | remote(fork) |
 | --- | --- | --- | --- | --- |
 | `genoffice/` | 应用本体 | `a1acf05` | 工作分支 `ohos/sota-debrand`（**尚无 tag**） | `github.com/hackeris/genoffice` |
-| `electron/` | Electron 本体（HarmonyOS fork） | `3af8ccb` | tag **`ohos-v37.2.0`** | `github.com/hackeris/electron` |
+| `electron/` | Electron 本体（HarmonyOS fork） | `3af8ccb` | tag **`ohos-v37.2.0`** | `gitcode.com/openharmony-sig/electron`（官方仓） |
 
 ## 应用仓库的两个锚点
 
@@ -24,7 +24,7 @@ electron 那边只有一个锚点：tag `ohos-v37.2.0` = 官方 fork 分支
 ## 操作
 
 ```sh
-# 首次克隆(需 fork 已推送对应分支与 tag)
+# 首次克隆
 GIT_LFS_SKIP_SMUDGE=1 git submodule update --init        # electron 源含 LFS,跳过
 
 # 校验:submodule 钉的 commit 是否正好等于某个 tag
@@ -39,27 +39,9 @@ git push origin <分支> && git push origin <tag>
 `ohos/sota-debrand` 的 `a1acf05`，而这个位置还没有打 tag。这是预期状态，不是损坏；
 等这轮改造收尾、在 fork 上打好新 tag 之后，再把它作为锚点更新到上表。
 
-## 风险
-
-### fetch 源指向 `.temp/`
-
-两个 submodule 的 `origin` 目前都是 `file://` 指向 `.temp/` 下的本地副本，
-**`.temp/` 一旦清掉，`git submodule update` 就再也拉不回来**。
-
-fork 就绪后执行 `git submodule sync --recursive` 把源切到 fork，这条风险才解除。
-
-### 有两个 commit 不在任何远端
-
-`ohos/sota-debrand` 分支上的两个 commit（`9f22c10`、`a1acf05`）**只存在于本仓的
-`.git/modules/` 里**：分支没有 upstream，本地副本里也没有这两个对象，从任何已记录的
-remote 都取不到。
-
-在这条分支推到 fork 之前，它一旦丢失就无法恢复。**这是当前仓库最脆弱的一处。**
-
 ## 说明
 
 - submodule 记录的是 commit。tag 是静态锚点，作用是让这个 commit 可追溯、可复现。
 - `.gitmodules` 里的 `branch` 字段只供 `git submodule update --remote` 跟踪维护分支用，
   它跟 tag 锚定是两回事。
-- `engine-ref/`（不入库）是集成方式的参考源兼过渡期的引擎二进制来源，
-  正式产物由 `thirdparty/electron` 的构建产出替代（见 `docs/PORT_DESIGN.md` §5.1）。
+- `.temp/engine-ref/`（不入库）= 引擎集成方式的参考源,兼 `sync-engine.sh` 的默认取源地。

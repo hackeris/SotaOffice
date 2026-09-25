@@ -7,11 +7,11 @@
 #          + entry/libs/arm64-v8a 启动器(electron/node/libc++_shared.so/dev_config.json)
 # 用法:    引擎产物有更新(版本升级)后重跑本脚本再构建
 #
-# 【来源】引擎二进制正式来源 = thirdparty/electron(electron 本体 fork,分支
+# 【来源】默认取 .temp/engine-ref(引擎集成方式的参考源,布局同构;不入库)。
+# 引擎产物的正式来源 = thirdparty/electron(electron 本体 fork,分支
 # electron-v37.2.0-openharmony)的构建产物(src/out/musl_64:libelectron.so/
 # libffmpeg.so/libadapter.so/electron/icudtl.dat/v8_context_snapshot.bin/
-# resources.pak/locales 等,见其 README「输出结果」节)。产物就绪前,过渡期源 =
-# thirdparty/engine-ref(集成方式参考源,布局同构)。产物就绪后仅需换 [源目录] 参数。
+# resources.pak/locales 等,见其 README「输出结果」节)。
 #
 # 【不改动】web_engine 的 ets/cpp 适配层与 module.json5 已自有化入本仓(git 管理),
 # 本脚本只组装二进制,绝不覆盖源码——改动适配层请直接改 web_engine/ 下文件。
@@ -30,8 +30,8 @@
 #   - 运行期落盘路径是 libs/arm64(无 -v8a),本脚本只管源布局
 set -eo pipefail
 
-SRC="${1:-/data/share/smartoffice/thirdparty/engine-ref}"
 DST="$(cd "$(dirname "$0")/.." && pwd)"
+SRC="${1:-$DST/.temp/engine-ref}"
 
 [ -d "$SRC/web_engine/libs/arm64-v8a" ] || { echo "FATAL: 源不存在: $SRC/web_engine/libs/arm64-v8a" >&2; exit 1; }
 

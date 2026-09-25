@@ -1,10 +1,10 @@
 # 版本锚定见 thirdparty/VERSIONS.md(submodule 钉 commit = 对应 release tag 指向)
-# genoffice: ohos-v1.0.0 / electron: ohos-v37.2.0
+# genoffice: ohos-v1.0.0 → ohos/sota-debrand / electron: ohos-v37.2.0
 [submodule "thirdparty/genoffice"]
 	path = thirdparty/genoffice
-	url = https://github.com/hackeris/genoffice.git
-	branch = ohos/electron37
+	url = git@github.com:hackeris/genoffice.git
+	branch = ohos/sota-debrand
 [submodule "thirdparty/electron"]
 	path = thirdparty/electron
-	url = https://github.com/hackeris/electron.git
+	url = https://gitcode.com/openharmony-sig/electron.git
 	branch = electron-v37.2.0-openharmony
