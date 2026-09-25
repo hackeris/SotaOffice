@@ -27,6 +27,10 @@ electron 那边只有一个锚点：tag `ohos-v37.2.0` = 官方 fork 分支
 # 首次克隆
 GIT_LFS_SKIP_SMUDGE=1 git submodule update --init        # electron 源含 LFS,跳过
 
+# 只有要自编译引擎时才需要:把 LFS 对象拉全
+# (patch 与 ohos_sdk 工具链默认落成 130 字节的指针,不拉全 electron_build.sh 用不了)
+git -C thirdparty/electron lfs pull
+
 # 校验:submodule 钉的 commit 是否正好等于某个 tag
 git -C thirdparty/electron describe --tags --exact-match     # 应输出 ohos-v37.2.0
 git -C thirdparty/genoffice describe --tags --exact-match     # 当前会失败,见下
