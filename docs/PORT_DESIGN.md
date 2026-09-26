@@ -1,6 +1,6 @@
 # GenOffice → HarmonyOS 移植设计
 
-> 分区：移植方案 | 目标：HarmonyOS PC(2in1) 优先
+> 分区：移植方案 | 目标：HarmonyOS PC(2in1) 与平板（统一包）
 > 决策与架构看本文；踩坑见 `PITFALLS.md`；能力矩阵与验收见 `ELECTRON_OHOS_CHECKLIST.md`、`M1_ACCEPTANCE.md`；
 > 上游应用的源码级分析见 `appendix/`；文档索引见 `README.md`。
 
@@ -9,11 +9,11 @@
 | # | 决策 | 依据 |
 |---|---|---|
 | D1 | **路线 A：Electron-on-OHOS**——用 openharmony-sig 维护的 Electron fork（`v37.2.0-openharmony`，Chromium 138 + Node 22.17）当运行时，应用产物原样装入 HAP | GenOffice 是"重 Node 主进程"应用（419 个 `ipcMain.handle` + 4 个自定义 scheme + printToPDF + WebContentsView + 内嵌 HTTP 服务），ArkTS 壳重写是**人年级**成本，换运行时是人月级 |
-| D2 | **仅 PC(2in1)**；`deviceTypes` 两处声明均为 `["2in1"]`，**手机、平板均不在支持面** | fork 的窗口层面向大屏（手机不在 fork 支持面）；平板拒装 `executableBinaryPaths` 应用（9568449），HNP 平板又不支持，平板路线关门（详见 PITFALLS「平板装不上」） |
+| D2 | **PC(2in1) 与平板同一 HAP**；`deviceTypes` 两处声明均为 `["2in1","tablet"]`，**手机不在 fork 支持面** | 平板拒装 `executableBinaryPaths` 应用（9568449），HNP 平板又不支持——统一包移除该声明，可执行位全部退役（sidecar 见 D6）；引擎层平板无硬阻塞的判据与证据链见 `PAD_MIGRATION.md` |
 | D3 | **版本策略：应用降级适配 Electron 37**（不去升级 fork 到 43） | 升级 fork 等于自编译 Chromium（>200G 磁盘、>32G 内存） |
 | D4 | 发布侧 kernel ACL 目标**仅 1 条**：`kernel.ALLOW_WRITABLE_CODE_MEMORY` | V8 JIT 的 W^X 内存页，是 Electron 运行时的唯一硬需求；场景对口官方定义"自带引擎的即时编译" |
 | D5 | `kernel.LOAD_INDEPENDENT_LIBRARY` **不申请** | 它是参考工程内置 CLI 工具（bash/zsh/rg）的需求，不是 Electron 运行时需求——`libelectron.so` 走 HAP 的 so 签名体系装载。将来做 CLI 生态时再评估 |
-| D6 | Rust xlsx-sidecar 交叉编译为 aarch64-ohos 可执行文件，走 `executableBinaryPaths` 注册 + spawn，stdio JSON 协议零改动 | 规避独立库装载的权限问题；上游 Windows 版也是独立可执行文件 |
+| D6 | Rust xlsx-sidecar 交叉编译为 aarch64-ohos cdylib（`libxlsx_sidecar.so`），经系统 Native 子进程机制拉起（`OH_Ability_StartNativeChildProcess` + socketpair fd 衔接 stdin/stdout），stdio JSON 协议零改动；开发机无启动壳时回退 spawn | 统一包不能声明 `executableBinaryPaths`（平板拒装），可执行文件路线关门；客户端代码与上游逐字一致，只新增 fd→Socket 适配层 |
 | D7 | 产物可复现纪律：产物不入库、一键重生成脚本、毁灭性重建演练 | 全局构建可复现原则 |
 
 ## 1. 背景与对象
@@ -33,7 +33,7 @@
 |---|---|---|
 | 主进程 5.4 万行 | 原样跑（Node 22.17 完整运行时） | 419 IPC + 4 scheme + 打印 + 多标签逐个重写 |
 | printToPDF / CDP / WebContentsView | fork 内置 | ArkWeb 无对应，另起炉灶 |
-| Rust sidecar | 交叉编译 + spawn，协议零改动 | 必须改造 NAPI `.so`，协议重设计 |
+| Rust sidecar | 交叉编译 + Native 子进程，协议零改动 | 必须改造 NAPI `.so`，协议重设计 |
 | wasm（pdfium 等） | fork 的 Node 主进程原样跑 | ArkTS 无 wasm 引擎，PDF 管线搬家 |
 | MCP server / control socket | 原样跑 | 无对应，裁剪 |
 | Electron 43→37 | 需清点适配 | 无此问题 |
@@ -47,8 +47,9 @@
 ```
 ┌─ HarmonyOS HAP(单 entry 模块 + web_engine HAR)───────────────────┐
 │  entry 模块(ArkTS,继承 WebAbility/WebAbilityStage,薄壳)         │
-│    ├─ executableBinaryPaths: electron / node / xlsx-sidecar      │
-│    │    都落在 libs/arm64-v8a/(源布局;运行期是 libs/arm64)      │
+│    ├─ deviceTypes: ["2in1","tablet"](统一包;无可执行位声明)     │
+│    ├─ libs/arm64-v8a/: libxlsx_sidecar.so + libxlsx_launcher.node│
+│    │    (Native 子进程件,源布局;运行期是 libs/arm64)           │
 │    └─ 文件关联 skills(6 类 UTD,见 §6.3)                          │
 │                                                                    │
 │  web_engine HAR(适配层已自有化入本仓 git 管理)                    │
@@ -63,7 +64,7 @@
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-**装载链**：`WebAbilityStage → XComponent(libraryname="adapter") 装载 libadapter.so → nativeContext.runBrowser(argv) → appspawn fork electron 启动器 → 链接 libelectron.so → ElectronMain → 载入 resfile/resources/app/package.json 的 main（= main-shim.mjs）`。
+**装载链**：`WebAbilityStage → XComponent(libraryname="adapter") 装载 libadapter.so → nativeContext.runBrowser(argv) → childProcessManager.startChildProcess(APP_SPAWN_FORK) → appspawn fork（不 exec）→ 链接 libelectron.so → ElectronMain → 载入 resfile/resources/app/package.json 的 main（= main-shim.mjs）`。引擎的 renderer/GPU/NetworkService 子进程走同一 fork 通道——全程没有可执行文件被 exec。
 
 **权限声明只有一处**：`web_engine/src/main/module.json5`（随 HAR 合并），entry 模块自身零声明。
 
@@ -71,8 +72,8 @@
 
 **两条装载/签名体系的区分（勿混淆，见 D5）**：
 
-- **HAP so 签名体系**：`libs/arm64-v8a/*.so` 安装时注册签名（XPM）——`libelectron`/`libadapter` 等走这条，**不需要 `LOAD_INDEPENDENT_LIBRARY`**；
-- **二进制证书体系**：`executableBinaryPaths` 注册的独立可执行文件（electron/node 启动器、xlsx-sidecar）——参考工程因为内置 bash/zsh/rg 才申请那条权限，本项目不带 CLI 工具，不申请。
+- **HAP so 签名体系**：`libs/arm64-v8a/*.so` 安装时注册签名（XPM）——本项目全部二进制（`libelectron`/`libadapter`/`libxlsx_sidecar` 等）都走这条，**不需要 `LOAD_INDEPENDENT_LIBRARY`**；
+- **二进制证书体系**：`executableBinaryPaths` 注册的独立可执行文件——本项目**不使用**（该声明平板拒装，见 D2/D6），也不带 CLI 工具，`LOAD_INDEPENDENT_LIBRARY` 不申请（见 D5）。
 
 当前声明共 **12 条**（`requestPermissions`）+ 2 条 `definePermissions`：
 

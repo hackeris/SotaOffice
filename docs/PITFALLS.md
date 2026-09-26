@@ -112,18 +112,18 @@ shim 打桩改成 `linux`。
 API 支持面矩阵标着"不支持"的 `requestSingleInstanceLock`，真机上实际返回 true。
 **能实测的就别只信矩阵。**
 
-### 平板装不上，不是包坏了
+### executableBinaryPaths 声明 = 平板拒装
 
 **现象**：`bm install` 报 `9568449` / `check bin file failed`。文件传输完好（设备端与本地 md5 一致），
 HAP 结构也完整（zip 校验通过），但设备就是拒绝安装。
 
-**根因**：应用在 `module.json5` 里声明了 `executableBinaryPaths`——引擎启动器和 sidecar
-要靠它拿到可执行权限。**这类应用只有 PC/2in1 形态的设备支持安装，平板装不了。**
+**根因**：`module.json5` 声明了 `executableBinaryPaths`（一条即触发）——**这类 HAP 只有
+PC/2in1 设备支持安装，平板一律拒装**，与声明几条、内容是什么无关。
 
-**做法**：换 2in1 设备。这是硬约束，不是配置写错。
-
-> 补充：HNP 包（`executableBinaryPaths` 的官方替代路线）平板也不支持——两条路都断，
-> 平板已从支持面移除，`deviceTypes`（entry 与 web_engine HAR 两处）均收敛为 `["2in1"]`。
+**现状**：统一包不含该声明（`deviceTypes` 为 `["2in1","tablet"]`，可执行位全部退役，
+sidecar 走 Native 子进程），平板可装。反过来说：**再往 `module.json5` 加回该声明，或让
+electron/node/xlsx-sidecar 这类可执行位产物混进包里，平板立刻回到拒装**——构建脚本的
+退役件清理与断言就是防这个。HNP 包（官方替代路线）平板同样不支持。证据链见 `PAD_MIGRATION.md`。
 
 ## 权限与签名
 

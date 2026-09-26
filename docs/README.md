@@ -13,6 +13,7 @@
 | 要改兼容层（shim） | **`SHIM_INTERNALS.md`** |
 | 想查某个坑是不是踩过 | **`PITFALLS.md`** |
 | 想知道还有什么没做完 | **`OPEN_ITEMS.md`** |
+| 要评估能不能上平板 | `PAD_MIGRATION.md` |
 | 要做发布前的去上游化改造 | `SOTA_RELEASE_TODO.md`（执行清单）+ `SOTA_DECISIONS.md`（为什么这么选）+ `BRAND_REPLACEMENT.md`（品牌替换怎么做） |
 | 要给 Electron fork 提 issue | `UPSTREAM_FEEDBACK.md` |
 | 想知道某段移植决策怎么来的 | `PORT_DESIGN.md` §0～§6 |
@@ -38,6 +39,7 @@
 | **打印** | ★`M2_VERIFY_CHECKLIST.md` §D1、`UPSTREAM_FEEDBACK.md` #5、`MIGRATION_ISSUES.md` L2.3 | 结论一致，落地判据在 M2 |
 | **fork 已知缺陷** | ★`UPSTREAM_FEEDBACK.md`、`ELECTRON_OHOS_CHECKLIST.md` 附 C | |
 | **原生二进制** | ★`MIGRATION_ISSUES.md` L6、`PORT_DESIGN.md` §5 | Rust sidecar 交叉编译配方、wasm 预验 |
+| **平板形态** | ★`PAD_MIGRATION.md`、`PORT_DESIGN.md` D2、`PITFALLS.md`「executableBinaryPaths 声明 = 平板拒装」 | 引擎层无硬阻塞；统一包落地形态与验证状态在主文档 |
 | **发布改造** | ★`SOTA_RELEASE_TODO.md`（清单）、`SOTA_DECISIONS.md`（决策依据）、`BRAND_REPLACEMENT.md`（品牌替换方案） | |
 | **字体与视觉基线** | ★`MIGRATION_ISSUES.md` L7、`appendix/A` §7 | 尚未启动，无真机数据 |
 
@@ -47,7 +49,7 @@
 | --- | --- |
 | **操作手册**（随工程更新） | `BUILD_AND_DEPLOY.md`、`DEVICE_OPERATIONS.md`、`PERMISSIONS_ACL.md`、`SHIM_INTERNALS.md` |
 | **横向登记**（随工程更新） | `PITFALLS.md`、`OPEN_ITEMS.md` |
-| **活文档**（随工程更新） | `PORT_DESIGN.md`、`M2_VERIFY_CHECKLIST.md`、`SOTA_RELEASE_TODO.md`、`SOTA_DECISIONS.md`、`BRAND_REPLACEMENT.md`、`thirdparty/VERSIONS.md` |
+| **活文档**（随工程更新） | `PORT_DESIGN.md`、`M2_VERIFY_CHECKLIST.md`、`SOTA_RELEASE_TODO.md`、`SOTA_DECISIONS.md`、`BRAND_REPLACEMENT.md`、`PAD_MIGRATION.md`、`thirdparty/VERSIONS.md` |
 | **验收记录 + ACL 登记**（§1–§3 归档；§4 随权限申请与授权进度更新） | `M1_ACCEPTANCE.md` |
 | **快照**（某个时点的分析，故意不更新） | `poc2-breakage-report.md`、`appendix/A`、`MIGRATION_ISSUES.md` |
 | **对外材料** | `UPSTREAM_FEEDBACK.md`（面向 fork 维护方） |
@@ -65,9 +67,10 @@
 | `build-genoffice.sh` | 组装应用产物到 resfile | `BUILD_AND_DEPLOY.md` 第二步 |
 | `build-ohos.sh` | 权限校验、打包 HAP | `BUILD_AND_DEPLOY.md` 第三步、`PERMISSIONS_ACL.md` |
 | `grant-acl.sh` | 装机后授权 | `DEVICE_OPERATIONS.md` 授权一节 |
-| `m1-rebuild-drill.sh` | 毁灭性重建演练 | `BUILD_AND_DEPLOY.md` 证明可复现 |
+| `rebuild-drill.sh` | 毁灭性重建演练 | `BUILD_AND_DEPLOY.md` 证明可复现 |
 | `verify-file-assoc.sh` | 文件关联抽验 | `M2_VERIFY_CHECKLIST.md` §B |
 | `e2e/ohos-smoke.mjs` | 真机 smoke | `M1_ACCEPTANCE.md` §2 |
+| `e2e/six-type-regression.mjs` | 六类型文件设备级回归 | 脚本头注释（覆盖面与缺口） |
 | `selfcheck-cdp.mjs` | 自检 HAP 的 CDP 探针 | `scripts/selfcheck-app/` |
 | `poc2-breakage-scan.sh` | 兼容性清点（一次性） | `poc2-breakage-report.md` |
 | `gen-icons.py` | 生成鸿蒙图标资源 | — |

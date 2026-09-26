@@ -145,7 +145,7 @@ node scripts/selfcheck-cdp.mjs                 # 自检 HAP 的探针
 ## 证明可复现
 
 ```sh
-bash scripts/m1-rebuild-drill.sh
+bash scripts/rebuild-drill.sh
 ```
 
 删掉全部可重建产物，再从零跑一遍三个脚本，全绿才算数。

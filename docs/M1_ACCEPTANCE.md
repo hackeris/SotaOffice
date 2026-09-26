@@ -37,7 +37,7 @@
 
 ## 3. G6 收尾(✅ 2026-09-22)
 
-- [x] 毁灭性重建演练:`bash scripts/m1-rebuild-drill.sh`(固化入库;rm web_engine/oh_modules/entry-build/resfile/build-profile → 三脚本全绿,HAP 327,743,120 B/670 files;产物已重装真机并 smoke 复验 7/7)
+- [x] 毁灭性重建演练:`bash scripts/rebuild-drill.sh`(固化入库;rm web_engine/oh_modules/entry-build/resfile/build-profile → 三脚本全绿,HAP 327,743,120 B/670 files;产物已重装真机并 smoke 复验 7/7)
 - [x] gitignore:`entry/src/main/resources/resfile/resources/`(109M 产物,可重建)
 - [x] 本表 / 清单 §3 修订
 - [x] 一键入口核对:`npm run build:ohos`(sync-engine + build-genoffice --no-build + build-ohos;G4-G5 期间多轮实际使用)
