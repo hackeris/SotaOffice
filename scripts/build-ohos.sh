@@ -9,7 +9,7 @@
 #          注:旧 build-app.sh 已退役(逻辑并入 build-genoffice.sh --selfcheck)
 # 前提:    /apps/harmony(command-line-tools,hoa 容器内挂载);
 #          scripts/.signing.snippet(gitignore,签名注入片段;缺失则自动产出 unsigned)
-# 断言:    HAP 存在 + >200MB + 十八关键件全在包内(so×3/启动器×2/sidecar/resfile 资源/自检 app),
+# 断言:    HAP 存在 + >200MB + 关键件全在包内(引擎 so×3/xlsx 入口库+启动壳/resfile 资源),
 #          失败非零退出。踩坑记录见各注释。
 set -eo pipefail
 
@@ -98,9 +98,6 @@ for f in \
   "libs/arm64-v8a/libadapter.so" \
   "libs/arm64-v8a/libffmpeg.so" \
   "libs/arm64-v8a/libc++_shared.so" \
-  "libs/arm64-v8a/electron" \
-  "libs/arm64-v8a/node" \
-  "libs/arm64-v8a/xlsx-sidecar" \
   "libs/arm64-v8a/dev_config.json" \
   "resources/resfile/icudtl.dat" \
   "resources/resfile/resources.pak" \
@@ -109,8 +106,15 @@ for f in \
   "resources/resfile/locales/zh-CN.pak" \
   "resources/resfile/resources/app/main-shim.mjs" \
   ; do
-  grep -q " $f\$" "$MANIFEST" || { echo "FATAL: HAP 缺关键件 $f(collectAllLibs/executableBinaryPaths/资产组装疑点)" >&2; exit 1; }
+  grep -q " $f\$" "$MANIFEST" || { echo "FATAL: HAP 缺关键件 $f(collectAllLibs/资产组装疑点)" >&2; exit 1; }
 done
+# Native 子进程件只在 GenOffice 模式组装(--selfcheck 不含 sheets,见 build-genoffice [3b/4]);
+# 断言不按模式门控时,自检回退通道在全新树上会直接 FATAL
+if [ "$APP_MODE" = "genoffice" ]; then
+  for f in "libs/arm64-v8a/libxlsx_sidecar.so" "libs/arm64-v8a/libxlsx_launcher.node"; do
+    grep -q " $f\$" "$MANIFEST" || { echo "FATAL: HAP 缺关键件 $f(Native 子进程件组装疑点)" >&2; exit 1; }
+  done
+fi
 # 模式特有断言
 if [ "$APP_MODE" = "genoffice" ]; then
   for f in \
@@ -138,6 +142,6 @@ fi
 # libelectron 体积断言:LFS 指针未拉取时只有 ~130 字节
 LE_SZ=$(grep "libelectron.so\$" "$MANIFEST" | awk '{print $1}')
 [ "$LE_SZ" -gt 100000000 ] || { echo "FATAL: libelectron.so 仅 ${LE_SZ} bytes(疑似 LFS 指针文本)" >&2; exit 1; }
-echo "    关键件断言通过(mode=$APP_MODE:引擎 so×3 + 启动器×2 + sidecar + resfile 资源 + app)"
+echo "    关键件断言通过(mode=$APP_MODE:引擎 so + resfile 资源 + app$( [ "$APP_MODE" = "genoffice" ] && echo ' + Native 子进程件' ))"
 unzip -l "$HAP" | tail -3
 echo "==> 构建通过:$HAP"

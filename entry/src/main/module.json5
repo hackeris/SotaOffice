@@ -12,25 +12,15 @@
     "srcEntry": "./ets/Application/AbilityStage.ets",
     "description": "$string:module_desc",
     "mainElement": "EntryAbility",
-    // 仅 2in1:executableBinaryPaths 应用平板拒装(9568449),HNP 平板不支持——
-    // 平板路线整体关门(见 PORT_DESIGN D2);fork 本就不支持 phone
-    "deviceTypes": ["2in1"],
-    "executableBinaryPaths": [
-      { "path": "libs/arm64-v8a/electron" },
-      { "path": "libs/arm64-v8a/node" },
-      { "path": "libs/arm64-v8a/xlsx-sidecar" }
-    ],
+    // 统一包(2in1+tablet):不带 executableBinaryPaths(该声明平板拒装 9568449)。
+    // 可执行位已全部退役:electron/node 启动器无人 exec;xlsx-sidecar 改走
+    // Native 子进程机制(native_child_process.h)。方案见 docs/PAD_MIGRATION.md
+    "deviceTypes": ["2in1", "tablet"],
     "deliveryWithInstall": true,
     "installationFree": false,
     "extractNativeLibs": true,
     "compressNativeLibs": false,
     "pages": "$profile:main_pages",
-    "metadata": [
-      {
-        "name": "electron_exec_path_ohos",
-        "value": "/data/storage/el1/bundle/libs/arm64/electron"
-      }
-    ],
     "abilities": [
       {
         "name": "EntryAbility",

@@ -9,7 +9,7 @@
 #            wasm/{pdfium,hb-subset}.wasm + THIRD-PARTY-NOTICES.txt
 # 链路:    sync-engine.sh(引擎)→ 本脚本(GenOffice app)→ build-ohos.sh(HAP+断言)
 # 前提:    --src 指向的 genoffice 仓(thirdparty/genoffice submodule)在允许分支
-#          (ohos/electron37 上游基线 / ohos/sota-debrand Sota Office 改造);
+#          (ohos/electron37 上游基线 / ohos/sota-debrand 产品化改造分支);
 #          产物缺失时先重建:cd thirdparty/genoffice && npm ci(--ignore-scripts
 #          + ELECTRON_MIRROR=npmmirror 手动 install.js,cargo 须在 PATH) && npm run build:all;
 #          不指定 --no-build 则脚本内自动跑 npm run build:all
@@ -39,7 +39,7 @@ MODULES="docs sheets slides pdf markdown html"
 echo "==> [1/4] 源校验(mode=$MODE src=$SRC)"
 if [ "$MODE" = "genoffice" ]; then
   BR=$(git -C "$SRC" branch --show-current 2>/dev/null || echo none)
-  # 允许的分支:ohos/electron37(上游基线)与 ohos/sota-debrand(Sota Office 改造分支)。
+  # 允许的分支:ohos/electron37(上游基线)与 ohos/sota-debrand(产品化改造分支)。
   # 守卫的意义是挡住"在别的分支上误构建":branch 名是唯一可靠的判据(改分支名会
   # 同时改这里);新增工作分支时一并加进来,不要放宽成前缀匹配。
   case "$BR" in
@@ -85,7 +85,7 @@ if [ "$MODE" = "genoffice" ]; then
   node -e '
     require("fs").writeFileSync(process.argv[2], JSON.stringify({
       name: "sotaoffice", version: process.argv[3],
-      description: "Sota Office on HarmonyOS(Electron 37 fork)",
+      description: "Smart Office on HarmonyOS(Electron 37 fork)",
       main: "./main-shim.mjs",
     }, null, 2) + "\n");
   ' "$SRC" "$RES_DIR/app/package.json" "$HAP_VER"
@@ -114,14 +114,17 @@ else
   cp -f entry/src/main/resources/base/media/app_icon.png "$RES_DIR/app/icon.png"
 fi
 
-echo "==> [3b/4] sidecar(xlsx Rust 引擎 → entry/libs;entry/module.json5 的
-executableBinaryPaths 硬性要求其在位,缺失则 hvigor PreBuild 报 00304069)"
+echo "==> [3b/4] xlsx 引擎 Native 子进程化(入口库 libxlsx_sidecar.so + 启动壳
+libxlsx_launcher.node → entry/libs;统一包无可执行位声明,平板可装)"
 if [ "$MODE" = "genoffice" ]; then
   SIDECAR_SRC="$SRC/apps/sheets/native/xlsx-engine"
-  SIDECAR_BIN="$SIDECAR_SRC/target/aarch64-unknown-linux-ohos/release/xlsx-sidecar"
-  SIDECAR_DST="entry/libs/arm64-v8a/xlsx-sidecar"
+  SIDECAR_SO="$SIDECAR_SRC/target/aarch64-unknown-linux-ohos/release/libxlsx_sidecar.so"
+  SIDECAR_DST="entry/libs/arm64-v8a/libxlsx_sidecar.so"
   mkdir -p entry/libs/arm64-v8a
-  if [ ! -f "$SIDECAR_BIN" ]; then
+  # 退役件清理:旧 spawn 链的产物残留在增量树上会被 collectAllLibs 打进 HAP,
+  # 平板安装再次 9568449。此处显式 rm,保证「新件断言绿 = 包里没有旧可执行位」
+  rm -f entry/libs/arm64-v8a/electron entry/libs/arm64-v8a/node entry/libs/arm64-v8a/xlsx-sidecar
+  if [ ! -f "$SIDECAR_SO" ]; then
     # 交叉编译(约 50s). 三个坑(2026-09-22 实测,cargo 1.98/stable):
     #   ① CC_aarch64_unknown_linux_ohos 给 cc crate 编 C 依赖(ironcalc→旧 zip→
     #      bzip2-sys/zstd-sys),缺则 C 代码编译失败;
@@ -136,11 +139,16 @@ if [ "$MODE" = "genoffice" ]; then
       cargo build --release --target aarch64-unknown-linux-ohos >/tmp/xlsx-sidecar-build.log 2>&1) \
       || { echo "FATAL: sidecar 交叉编译失败(见 /tmp/xlsx-sidecar-build.log)" >&2; exit 1; }
   fi
-  [ -s "$SIDECAR_BIN" ] || { echo "FATAL: sidecar 产物缺失: $SIDECAR_BIN" >&2; exit 1; }
-  cp -f "$SIDECAR_BIN" "$SIDECAR_DST" && chmod +x "$SIDECAR_DST"
-  echo "    sidecar 就位($(stat -c%s "$SIDECAR_DST") bytes)"
+  [ -s "$SIDECAR_SO" ] || { echo "FATAL: 入口库产物缺失: $SIDECAR_SO" >&2; exit 1; }
+  cp -f "$SIDECAR_SO" "$SIDECAR_DST"
+  echo "    入口库就位($(stat -c%s "$SIDECAR_DST") bytes)"
+  # 启动壳(napi addon;.node 后缀是 fork dlopen 的硬要求,详见其 build.sh 头注释)
+  bash "$SRC/apps/sheets/native/xlsx-launcher/build.sh" \
+    || { echo "FATAL: 启动壳构建失败" >&2; exit 1; }
+  [ -s "entry/libs/arm64-v8a/libxlsx_launcher.node" ] \
+    || { echo "FATAL: libxlsx_launcher.node 未就位" >&2; exit 1; }
 else
-  [ -x "entry/libs/arm64-v8a/xlsx-sidecar" ] || echo "    自检模式:entry/libs 无 sidecar(若 module.json5 声明了它,hvigor 会报错)"
+  echo "    自检模式:Native 子进程件不参与(自检 app 不含 sheets)"
 fi
 
 # 公共清理:map 文件(--keep-maps 保留)、符号链接(HAP zip 安全)、.ts 残留

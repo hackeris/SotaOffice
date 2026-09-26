@@ -4,7 +4,7 @@
 # 正确命令:bash scripts/sync-engine.sh [引擎产物源目录]
 # 正确目录:仓根(脚本内部自行定位)
 # 产物:    web_engine/libs/arm64-v8a/*.so + web_engine/src/main/resources/resfile/ 资源
-#          + entry/libs/arm64-v8a 启动器(electron/node/libc++_shared.so/dev_config.json)
+#          + entry/libs/arm64-v8a(libc++_shared.so/dev_config.json)
 # 用法:    引擎产物有更新(版本升级)后重跑本脚本再构建
 #
 # 【来源】.temp/engine-ref 不入库,clone 带不来,需要时自己拉:
@@ -23,10 +23,11 @@
 # 组装范围:
 #   1. libs 三件套(libelectron/libadapter/libffmpeg)+ resfile 资源(pak/icudtl/
 #      snapshot/locales/vulkan)
-#   2. entry libs 必需件:electron 启动器(appspawn fork 目标)/ node 启动器
-#      (utilityProcess/MCP 生态预留)/ libc++_shared.so / dev_config.json
-#   【不搬】bash/zsh/rg(GenOffice 无 CLI 工具)、.node+.so 别名(零 napi 模块)、
-#      crash-hook(遇 fork 崩溃无栈时再加)
+#   2. entry libs 必需件:libc++_shared.so / dev_config.json
+#   【不搬】electron/node 启动器与 xlsx-sidecar ELF——统一包不带可执行位
+#      (executableBinaryPaths 平板拒装):引擎子进程走 appspawn fork,
+#      xlsx 引擎走 Native 子进程机制(build-genoffice.sh 产出 libxlsx_sidecar.so
+#      + libxlsx_launcher.node)。【不搬】bash/zsh/rg、.node+.so 别名、crash-hook
 #
 # 踩坑记录:
 #   - dev_config.json 必须在 entry libs(libadapter.so 硬编码读
@@ -45,13 +46,9 @@ mkdir -p "$DST/web_engine/libs/arm64-v8a" "$DST/web_engine/src/main/resources/re
 cp -a "$SRC/web_engine/libs/arm64-v8a/." "$DST/web_engine/libs/arm64-v8a/"
 cp -a "$SRC/web_engine/src/main/resources/resfile/." "$DST/web_engine/src/main/resources/resfile/"
 
-echo "==> [2/3] 组装 entry libs(electron 启动器 ← 引擎产物源;libc++_shared.so ← OHOS
-SDK(官方指导来源);dev_config.json ← 本仓生成)"
+echo "==> [2/3] 组装 entry libs(libc++_shared.so ← OHOS SDK(官方指导来源);
+dev_config.json ← 本仓生成;启动器/ELF 已随统一包退役)"
 mkdir -p "$DST/entry/libs/arm64-v8a"
-for f in electron node node.c; do
-  [ -f "$SRC/electron/libs/arm64-v8a/$f" ] || { echo "FATAL: 源缺件 $f" >&2; exit 1; }
-  cp -f "$SRC/electron/libs/arm64-v8a/$f" "$DST/entry/libs/arm64-v8a/"
-done
 NDK_LIBCXX="${OHOS_NDK_LIBCXX:-/apps/harmony/sdk/default/openharmony/native/llvm/lib/aarch64-linux-ohos/libc++_shared.so}"
 [ -f "$NDK_LIBCXX" ] || { echo "FATAL: SDK libc++_shared.so 不存在: $NDK_LIBCXX" >&2; exit 1; }
 cp -f "$NDK_LIBCXX" "$DST/entry/libs/arm64-v8a/libc++_shared.so"

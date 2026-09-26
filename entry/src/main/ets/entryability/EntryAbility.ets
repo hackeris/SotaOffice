@@ -8,6 +8,7 @@ import AbilityConstant from '@ohos.app.ability.AbilityConstant';
 import { Configuration } from '@ohos.app.ability.Configuration';
 import abilityAccessCtrl, { Permissions } from '@ohos.abilityAccessCtrl';
 import bundleManager from '@ohos.bundle.bundleManager';
+import deviceInfo from '@ohos.deviceInfo';
 import { BusinessError } from '@ohos.base';
 import fs from '@ohos.file.fs';
 import fileUri from '@ohos.file.fileuri';
@@ -147,6 +148,27 @@ export default class EntryAbility extends WebAbility {
     }
   }
 
+  // 沉浸式(平板):隐藏状态栏/通知栏,应用内容全屏。仅 tablet 生效——2in1 无系统
+  // 状态栏概念,保持桌面形态。与 enableSystemDecor 同款重试:Chromium 创建平台窗口
+  // 时可能重置窗口状态,无事件锚点,幂等多次覆盖。
+  private applyImmersiveForTablet(windowStage: window.WindowStage): void {
+    if (deviceInfo.deviceType !== 'tablet') {
+      return;
+    }
+    const apply = (tag: string): void => {
+      try {
+        const win = windowStage.getMainWindowSync();
+        win.setWindowSystemBarEnable([]);
+        console.info(`[immersive] system bars hidden(${tag})`);
+      } catch (e) {
+        console.warn(`[immersive] ${tag} failed: ${JSON.stringify(e)}`);
+      }
+    };
+    for (const delay of [800, 1500, 3000]) {
+      setTimeout((): void => apply(`${delay}ms`), delay);
+    }
+  }
+
   // 系统窗口装饰(2026-09-23):Electron 桌面版靠 titleBarOverlay(Win/Linux)/交通灯
   // (macOS)由系统绘制窗口按钮;OHOS fork 无此机制。web_engine 虽在 loadContent 回调
   // 调过 setWindowDecorVisible(!hideTitleBar)(hideTitleBar 默认 false → true),但
@@ -260,11 +282,22 @@ export default class EntryAbility extends WebAbility {
       // 首启本就无此文件
     }
     this.pollUiReadyAndRequestStorage(0);
-    this.enableSystemDecor(windowStage);
-    try {
-      this.updateTitleButtonRect(windowStage.getMainWindowSync());
-    } catch (e) {
-      console.warn(`title button rect init: ${JSON.stringify(e)}`);
+    if (deviceInfo.deviceType === 'tablet') {
+      // 平板:无系统三键,decor 与按钮矩形上报均不适用——矩形误报全宽会让
+      // shim 桩⑮注入全宽右上避让,把 tab 条挤压成 0;残留矩形文件一并清除
+      try {
+        fs.unlinkSync(EntryAbility.BUTTON_RECT_FILE);
+      } catch (e) {
+        // 本就没有
+      }
+      this.applyImmersiveForTablet(windowStage);
+    } else {
+      this.enableSystemDecor(windowStage);
+      try {
+        this.updateTitleButtonRect(windowStage.getMainWindowSync());
+      } catch (e) {
+        console.warn(`title button rect init: ${JSON.stringify(e)}`);
+      }
     }
   }
 

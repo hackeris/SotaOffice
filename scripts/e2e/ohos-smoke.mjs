@@ -91,11 +91,12 @@ async function t_sheets_sidecar() {
   const ts = await targets()
   const sheet = ts.find(t => t.url.startsWith('genoffice-app://sheets'))
   if (!sheet) return record('sheets-sidecar', false, '无 sheets target(真机先建表并保存一次触发 sidecar)')
-  // 判据:sidecar 进程存活即 PASS(2026-09-21 实证:shim-log 在 hdc shell 下无权限读,
-  // cat 恒失败;ps 进程是 spawn remap 成功的更强证据——侧车经 el1 libs 重映射路径拉起)
+  // 判据:Native 子进程存活即 PASS(统一包改走系统 Native 子进程后,进程由
+  // appspawn fork,名字形如 <bundle>:Native_libxlsx_sidecar<N>;旧的 spawn 型
+  // xlsx-sidecar ELF 已退役,继续 grep 它恒空 = 永久假红)
   let proc = ''
-  try { proc = shell('ps -ef | grep xlsx-sidecar | grep -v grep | head -2') } catch {}
-  record('sheets-sidecar', !!proc.trim(), `proc=${proc.trim() ? 'alive' : 'not-running(未触发或已退出)'};shim-log hdc-shell 不可读,以 ps 为准`)
+  try { proc = shell('ps -ef | grep Native_libxlsx_sidecar | grep -v grep | head -2') } catch {}
+  record('sheets-sidecar', !!proc.trim(), `proc=${proc.trim() ? 'alive' : 'not-running(未触发或已退出)'};Native 子进程以 ps 为准`)
 }
 async function t_pdf_wasm() {
   const ts = await targets()

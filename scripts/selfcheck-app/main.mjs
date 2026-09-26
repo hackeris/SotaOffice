@@ -8,19 +8,17 @@
 //   A4 clipboard ....... selfcheck:clipboard
 //   A5 printToPDF ...... selfcheck:printToPDF(纯 Chromium 管线,官方标支持)
 //   A6 WCO 打桩 ........ selfcheck:wco(打桩后不崩 = shim 生效)
-//   A7 spawn sidecar ... selfcheck:sidecar(executableBinaryPaths + XPM 放行 + spawn 通路)
+//   A7 Native 子进程链 ... selfcheck:sidecar(启动壳装载 + 系统拉起 + fd 可用)
 //   A8 wasm pdfium ..... selfcheck:wasm(POC-5 真机 spot check;坚盾模式下此项 FAIL 属预期)
 //   A9 Tray ............ selfcheck:tray(官方"窗口与托盘强绑定"验证)
 //   人工观察 ........... 自检页顶部 checklist(三键/IME/拖拽/托盘图标)
 import { app, BrowserWindow, ipcMain, protocol, clipboard, nativeImage, Tray, net } from 'electron'
-import { spawn } from 'node:child_process'
-import { appendFileSync, readFileSync } from 'node:fs'
+import { appendFileSync, closeSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const HERE = path.dirname(new URL(import.meta.url).pathname) // resfile/resources/app
-const SIDECAR = '/data/storage/el1/bundle/libs/arm64/xlsx-sidecar' // 运行期路径(清单 §0:无 -v8a)
 const log = (m) => { try { appendFileSync('/data/storage/el2/base/files/shim-log.txt', `${new Date().toISOString()} [main] ${m}\n`) } catch {} }
 
 // 自定义 scheme(必须在 app ready 前;GenOffice 4 scheme 管线代表)
@@ -30,23 +28,26 @@ protocol.registerSchemesAsPrivileged([
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-// ---------- A7:spawn sidecar ----------
+// ---------- A7:xlsx Native 子进程链(统一包无可执行位声明,spawn 通路已退役) ----------
+// 等价验证:启动壳可 dlopen(napi 符号自 libelectron 解析)、系统子进程可拉起、
+// 父端 fd 可用。关掉 fd 让子进程读到 EOF 自行退出,不在自检里留孤儿。
 function runSidecar() {
-  return new Promise((resolve) => {
-    let out = '', err = '', settled = false
-    const done = (ok, detail) => { if (!settled) { settled = true; try { child.kill() } catch {}; resolve({ ok, detail }) } }
-    let child
-    try {
-      child = spawn(SIDECAR, ['--selfcheck'], { stdio: ['pipe', 'pipe', 'pipe'] })
-    } catch (e) {
-      return resolve({ ok: false, detail: `spawn threw: ${e?.message}` })
+  const LIB = '/data/storage/el1/bundle/libs/arm64/libxlsx_launcher.node'
+  try {
+    const mod = { exports: {} }
+    process.dlopen(mod, LIB)
+    const { startChild, lastChildPid } = mod.exports
+    if (typeof startChild !== 'function') {
+      throw new Error(`exports 缺 startChild(${Object.keys(mod.exports).join('/') || '空'})`)
     }
-    const t = setTimeout(() => done(true, `alive-silent(3s,exec+spawn OK;协议层 host 已验)\nstdout:${out}\nstderr:${err}`), 3000)
-    child.stdout?.on('data', (d) => { out += d; done(true, `stdout: ${out.trim().slice(0, 200)}`) })
-    child.stderr?.on('data', (d) => { err += d })
-    child.on('error', (e) => { clearTimeout(t); done(false, `error event: ${e?.message}(XPM 拦截/executableBinaryPaths 疑点)`) })
-    child.on('close', (code, sig) => { clearTimeout(t); done(false, `exited code=${code} sig=${sig}\nstdout:${out}\nstderr:${err}`) })
-  })
+    const fd = startChild('libxlsx_sidecar.so:Main')
+    const pid = lastChildPid()
+    if (!Number.isInteger(fd) || fd < 0) throw new Error(`startChild 返回异常 fd=${fd}`)
+    try { closeSync(fd) } catch { /* fd 已失效则子进程已自行退出 */ }
+    return Promise.resolve({ ok: true, detail: `launcher OK pid=${pid} fd=${fd}(fd 已关,子进程随 EOF 退出)` })
+  } catch (e) {
+    return Promise.resolve({ ok: false, detail: `Native 子进程链不可用: ${e?.message}(libxlsx_launcher.node 未组装或 napi 解析失败)` })
+  }
 }
 
 // ---------- A8:wasm pdfium(POC-5 脚本移植)----------
