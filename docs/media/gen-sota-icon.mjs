@@ -71,8 +71,8 @@ const BASE_EYES = [
     rx: EYE_RX, ry: EYE_RY },
 ]
 // SCALE:标记整体缩放,绕画布中心。1.0 时标记仅占画布 ~57%;1.28 时 ~71%,
-// 角落距画布中心 ~464,仍在系统圆形掩膜安全圈(半径 512)内,勿再放大。
-const SCALE = 1.28
+// 角落距画布中心 ~493,仍在系统圆形掩膜安全圈(半径 512)内;再大会裁边。
+const SCALE = 1.36
 const scaleGeo = ({ x, y, w, h, r }) => ({
   x: Math.round(512 + (x - 512) * SCALE),
   y: Math.round(512 + (y - 512) * SCALE),

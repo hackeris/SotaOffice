@@ -2,14 +2,14 @@
   <rect width="1024" height="1024" fill="#FFFFFF"/>
   <defs>
     <clipPath id="a">
-      <rect x="174" y="195" width="522" height="522" rx="123"/>
+      <rect x="153" y="175" width="555" height="555" rx="131"/>
     </clipPath>
   </defs>
-  <rect x="174" y="195" width="522" height="522" rx="123" fill="#c65444"/>
-  <rect x="328" y="307" width="522" height="522" rx="123" fill="#64a178"/>
+  <rect x="153" y="175" width="555" height="555" rx="131" fill="#c65444"/>
+  <rect x="316" y="294" width="555" height="555" rx="131" fill="#64a178"/>
   <g clip-path="url(#a)">
-    <rect x="328" y="307" width="522" height="522" rx="123" fill="#5183c3"/>
+    <rect x="316" y="294" width="555" height="555" rx="131" fill="#5183c3"/>
   </g>
-  <ellipse cx="458" cy="463" rx="24" ry="32" fill="#FFFFFF"/>
-  <ellipse cx="566" cy="463" rx="24" ry="32" fill="#FFFFFF"/>
+  <ellipse cx="455" cy="460" rx="26" ry="34" fill="#FFFFFF"/>
+  <ellipse cx="569" cy="460" rx="26" ry="34" fill="#FFFFFF"/>
 </svg>
