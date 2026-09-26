@@ -125,10 +125,13 @@ Y 偏移补偿；补偿标定后已全部复测）。修正后的结论：
 
 - 取证：触摸注入的事件链（touchstart→pointerdown→mousedown→click）以补偿后的精确坐标
   完整抵达网格 canvas（isTrusted=true），Univer 不消费（点击前后截屏对照，选区不动）；
-  CDP 真实鼠标同样无效。**焦点链异常**：FOCUSIN(canvas)→FOCUSIN(某 DIV) 焦点被抢，
-  两次独立实验均伴发系统软键盘误弹。
-- 定性：fork/引擎在触摸设备上的事件路径与 Univer 自绘输入层不兼容（异常点疑在焦点分配），
-  **应用侧不可修**——已入册 `UPSTREAM_FEEDBACK.md` #6（与 #1 能力上报缺失可能同源）。
+  CDP 真实鼠标同样无效。焦点链查明：canvas 获焦后 Univer 自己的焦点流程走到
+  内部单元格编辑器（`__editor___INTERNAL_EDITOR__DOCS_NORMAL`）获焦即停，选区状态机
+  不推进，软键盘因该可聚焦 DIV 误弹。
+- 应用侧自救已实测排除：加载前注入 `maxTouchPoints=5` 等触摸能力补丁（生效确认）后
+  复测，选区依旧不动——失效不（只）由能力上报缺失（#1）驱动。
+- 定性：fork/引擎在触摸设备上的事件路径与 Univer 自绘输入层不兼容，
+  **应用侧不可修**——已入册 `UPSTREAM_FEEDBACK.md` #6（含精确焦点链证据）。
 - 对 D1 的影响：在 P0-0 解决前，sheets 在纯触屏下不可用，其余触屏适配
   （HTML5 DnD、hover 显隐等）对 sheets 无意义、对其他模块可先行——上表 P1-3/P1-4 的
   真机复测在指针假设下结果可信，触摸侧待 P0-0 解决后随验。

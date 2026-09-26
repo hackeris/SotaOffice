@@ -85,16 +85,23 @@ CDP 合成鼠标事件在两台设备上均派发成功,但只在 PC 上改变�
 落点校验:WebContentsView 内嵌文档模块的屏幕原点在 tab 条下方(Y 偏移已标定补偿),
   补偿后 clientX/Y 与目标网格坐标精确一致,elementFromPoint 命中主网格 canvas
 结果:Univer 选区不变(点击前后截屏对照);同操作 CDP dispatchMouseEvent 也派发成功,同样不变
-焦点链(重点):FOCUSIN(canvas) → FOCUSIN(某 DIV) —— canvas 先获焦随即被抢走,
-  最终 activeElement 停在该 DIV;两次独立实验均出现系统软键盘误弹(点击网格无输入焦点却唤起键盘)
+焦点链(重点):FOCUSIN(ribbon AI 按钮) → FOCUSIN(canvas#univer-sheet-main-canvas,tabindex=1)
+  → FOCUSIN(DIV#__editor___INTERNAL_EDITOR__DOCS_NORMAL)
+  —— 最后一环是 Univer 的内部单元格编辑器容器,即 Univer 自身的焦点流程走到了
+  "内部编辑器获焦",但选区更新/编辑态建立没有继续;系统软键盘因此误弹
+  (该 DIV 可聚焦,系统按文本输入唤起键盘)
 对照:同页 HTML 按钮 tap → click 派发且业务生效;TipTap 正文 tap 聚焦、工具栏加粗 tap 生效
 对照:PC(2in1,非触摸)上 CDP 鼠标点击网格 → 选区正常跳转(如 G16)
 其他:navigator.maxTouchPoints=0(平板页面中),与回馈 #1 的能力上报缺失一致
 ```
 
+**已排除的应用侧自救(实测证伪)**:在页面加载前注入 `maxTouchPoints=5`、
+`'ontouchstart' in window`、`TouchEvent/Touch/TouchList` 补丁(补偿回馈 #1 的能力
+上报缺失),注入确认生效(`navigator.maxTouchPoints===5`)后复测——点击网格选区
+依旧不动。**Univer 的失效不(只)由能力上报缺失驱动**,应用侧补上报救不回来。
+
 **推断**:触摸设备上 Chromium 的事件合成/派发路径与 Univer 自绘输入层的某处不兼容。
-事件本身以正确坐标完整到达 canvas,**异常点在焦点管理**——canvas 获焦后被某 DIV 抢走,
-并连带软键盘误弹;Univer 的输入层依赖自身焦点宿主,焦点链异常与选区不更新可能同因。
-(能力上报缺失 #1 与本条可能同源——页面拿不到真实输入形态。)
-应用侧无法绕过:焦点与事件都在页面内,Univer 不消费。需 fork 侧排查触摸路径的
-焦点分配/事件构造(或与 #1 一并修能力上报后复测)。
+事件以正确坐标完整到达 canvas 且 canvas 获焦,Univer 自身焦点流程走到内部编辑器
+获焦即停,选区状态机不推进——疑为 Univer 对触摸合成 mouse 事件的某属性分支
+(detail/button 等)判定走偏。应用侧无法绕过:焦点与事件都在页面内,Univer 不消费。
+需 fork 侧排查触摸路径的事件构造(或与 #1 一并修能力上报后,配合 Univer 版本升级复测)。
