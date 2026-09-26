@@ -88,10 +88,29 @@ const pageClean = async (c) => {
 
 // ---------- xlsx:磁盘打开 + selection 往返 ----------
 async function t_xlsx(home) {
+  // 素材:默认保存目录优先;空目录(新装/刚换目录名)回退最近列表里任意 xlsx 路径。
+  // 已打开的文件不能选——close 会触发未保存确认框导致 tab 关不掉,后续断言全歪
+  const openPaths = JSON.parse(await evalIn(home, `(async () => {
+    const tabs = await window.aiOfficeTabs.list()
+    return JSON.stringify(tabs.map(t => t.filePath).filter(Boolean))
+  })()`))
   const root = JSON.parse(await evalIn(home, `(async () => JSON.stringify(await window.aiOffice.folderRoot()))()`)).path
   const list = JSON.parse(await evalIn(home, `(async () => JSON.stringify(await window.aiOffice.listFolder(${JSON.stringify(root)})))()`))
-  const xlsx = list.files.find(f => f.ext === 'xlsx')
-  if (!xlsx) return record('xlsx-open', false, `目录无 xlsx:${root}`)
+  let xlsx = list.files.find(f => f.ext === 'xlsx' && !openPaths.includes(f.path))
+  if (!xlsx) {
+    // 最近列表在沙箱下常见路径失效(文件已删/目录更名):statPaths 仍返回条目
+    // 但带 missing:true、sizeBytes:0,必须按 missing 过滤
+    const recentPath = await evalIn(home, `(async () => {
+      const page = await window.aiOffice.recents({ ext: 'xlsx', limit: 50 })
+      const open = ${JSON.stringify(openPaths)}
+      const candidates = (page.entries || []).map(e => e.path).filter(p => p && !open.includes(p))
+      const stat = await window.aiOffice.statPaths(candidates)
+      const alive = (stat || []).find(e => e && e.path && !e.missing)
+      return alive ? alive.path : ''
+    })()`)
+    if (recentPath) xlsx = { path: recentPath, name: recentPath.split('/').pop() }
+  }
+  if (!xlsx) return record('xlsx-open', false, `${root} 无可用的未打开 xlsx——先用应用手动保存任一 xlsx(且不打开它)后重跑`)
   const tab = await freshOpen(home, 'sheets', xlsx.path)
   if (!tab) return record('xlsx-open', false, `重开无新 sheets tab:${xlsx.name}`)
   // 激活该 tab(selection 依赖前台 activeWorkbook),等流式加载完成后取 selection

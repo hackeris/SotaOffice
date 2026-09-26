@@ -34,7 +34,7 @@ const shell = (cmd) => execFileSync(HDC, ['-t', TARGET, 'shell', cmd], { encodin
 // ---------- 用例 ----------
 async function t_boot() {
   const ts = await targets()
-  const home = ts.find(t => t.url.includes('index.html') || t.title.includes('GenOffice'))
+  const home = ts.find(t => t.url.includes('index.html') || t.title.includes('Smart Office'))
   record('boot', !!home, `targets=${ts.length};first=${ts[0]?.title ?? 'none'}|${ts[0]?.url ?? ''}`)
 }
 async function t_home() {
