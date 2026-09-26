@@ -1,6 +1,6 @@
-# Sota Office 鸿蒙移植
+# Smart Office 鸿蒙移植
 
-把 Sota Office（一款 Electron 桌面办公套件）搬到 HarmonyOS 上的工程仓。
+把 Smart Office（一款 Electron 桌面办公套件）搬到 HarmonyOS 上的工程仓。
 
 ## 做法
 
@@ -23,7 +23,7 @@
 ```sh
 npm run build:ohos                    # sync-engine → build-genoffice --no-build → build-ohos
 bash scripts/grant-acl.sh <device>    # 装机后必跑。不跑，应用会静默退出
-bash scripts/m1-rebuild-drill.sh      # 毁灭性重建演练，全绿才算可复现
+bash scripts/rebuild-drill.sh      # 毁灭性重建演练，全绿才算可复现
 node scripts/e2e/ohos-smoke.mjs       # 真机 smoke（需先 hdc fport 映射 9333）
 ```
 
@@ -47,7 +47,7 @@ node scripts/e2e/ohos-smoke.mjs       # 真机 smoke（需先 hdc fport 映射 9
 | 出现的场合 | 名字 |
 | --- | --- |
 | 仓库名、`package.json` | `smartoffice-ohos` |
-| 产品名、HAP 包名 | Sota Office / `app.fuqidian.sotaoffice` |
+| 产品名、HAP 包名 | Smart Office / `app.fuqidian.sotaoffice`（bundleName 不随产品名变） |
 | 上游应用名、代码里的标识符 | GenOffice |
 | 早期脚本注释 | `genoffice-ohos` |
 

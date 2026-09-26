@@ -1,13 +1,13 @@
 {
   "string": [
-    { "name": "module_desc", "value": "Sota Office entry module(Electron on OHOS)" },
-    { "name": "EntryAbility_desc", "value": "Sota Office HarmonyOS port" },
-    { "name": "EntryAbility_label", "value": "Sota Office" },
-    { "name": "BrowserAbility_desc", "value": "Sota Office browser ability" },
+    { "name": "module_desc", "value": "Smart Office entry module(Electron on OHOS)" },
+    { "name": "EntryAbility_desc", "value": "Smart Office HarmonyOS port" },
+    { "name": "EntryAbility_label", "value": "Smart Office" },
+    { "name": "BrowserAbility_desc", "value": "Smart Office browser ability" },
     { "name": "BrowserAbility_label", "value": "BrowserAbility" },
-    { "name": "StatusBarEntryAbility_desc", "value": "Sota Office status bar" },
-    { "name": "StatusBarEntryAbility_label", "value": "Sota Office StatusBar" },
-    { "name": "StatelessAbility_desc", "value": "Sota Office stateless ability" },
-    { "name": "StatelessAbility_label", "value": "Sota Office" }
+    { "name": "StatusBarEntryAbility_desc", "value": "Smart Office status bar" },
+    { "name": "StatusBarEntryAbility_label", "value": "Smart Office StatusBar" },
+    { "name": "StatelessAbility_desc", "value": "Smart Office stateless ability" },
+    { "name": "StatelessAbility_label", "value": "Smart Office" }
   ]
 }
