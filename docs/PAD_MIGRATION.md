@@ -69,5 +69,38 @@ launcher ELF 在 2in1 上也没有 exec 消费者，可执行位对两端都是�
 | 平板安装（证伪点） | 通过：统一包平板可装、可启动、可日常使用 |
 | 启动点亮（shim/CDP/多模块渲染） | 通过：双端多次冷启动验证，无开机自开文档等启动期异常 |
 | 六类型文件回归 | 通过 4 类：xlsx（磁盘打开→引擎加载→渲染）/ md / html（静默保存→磁盘重开→内容命中）/ pdf（落盘→打开→页指示），脚本 `scripts/e2e/six-type-regression.mjs`；**docx、pptx 与 xlsx 写回无设备级用例**（设备端无文件注入通道，写回无生产包 e2e 通道，见脚本头注释） |
-| 触屏交互 | 未专项适配：应用是桌面指针假设，平板以外接鼠标/触控板使用 |
+| 触屏交互 | 未专项适配（缺口分析见 §6）：应用是桌面指针假设，平板以外接鼠标/触控板使用 |
 | 窗口形态（悬浮窗/分屏）、内存性能、坚盾守护模式 | 未专项验证 |
+
+## 6. 触屏交互缺口分析（2026-09-26，代码证据口径）
+
+**前提**：全仓零 touch 事件处理，交互全部依赖 Chromium 把触摸合成为鼠标事件。
+tap→click、触摸滚动、ProseMirror/CodeMirror 文本选区与软键盘、Univer 的基本选区滚动
+（sheets-ui 内置 touchstart/touchmove 处理）、Konva 触摸事件（库内置）——这些是**白得的**。
+缺口按严重度分三档：
+
+### P0 结构性失效（不改就没有基本可用性）
+
+| # | 缺口 | 证据 | 适配方案 | 量级 |
+| --- | --- | --- | --- | --- |
+| 1 | **HTML5 拖放全线失效**——触屏不触发 dragstart | docs 块拖把手/表格行列把手（`extensions.ts` 多处 `draggable: true`、`table-handle.ts`）、markdown 块拖（`blockDragHandle.ts:63`） | 把手补 Pointer Events 拖拽（统一鼠标/触摸），或提供选中后"上移/下移"按钮替代路径 | 3-4 处，2-3 天 |
+| 2 | **触屏捏合/双击缩放未禁** | 各 index.html 无 `user-scalable`，无全局 `touch-action`（仅 docs 标尺、pdf 图层等局部设置）；各模块只处理 ctrl+wheel（触控板捏合），触屏捏合走 Chromium browser zoom 直接放大 UI | 主进程/shim 对 webContents 设 zoom 上限 + 全局 `touch-action` 策略 | 半天 |
+
+### P1 可用但可发现性/精度差
+
+| # | 缺口 | 证据 | 适配方案 | 量级 |
+| --- | --- | --- | --- | --- |
+| 3 | hover 驱动的显隐控件 | `:hover` 500+ 处；mouseenter 驱动显隐 8 处（slides/docs Ribbon 插入面板、SlashMenu、SlideCanvas 悬浮工具）。触屏 tap 会合成 mouseenter，基本可用但无 hover-out 语义，行为半残 | `@media (hover: none)` 下改常显或点击切换；逐个评审 | 1-2 天 |
+| 4 | 长按 contextmenu 与文本选择打架 | 右键菜单仅 3 处（slides 画布等），靠长按合成 contextmenu；长按同时启动选区手柄 | 真机实测后决定是否在菜单区禁用 user-select | 实测 1 天 + 修 0.5 天 |
+
+### P2 可接受，优化项（后置）
+
+- 快捷键依赖（41 文件 70+ 处）：软键盘无修饰键，但均有菜单/工具栏替代入口——保持现状，产品文档说明
+- 触屏精度：sheets 填充柄等小把手命中区小——`(hover: none)` 下放大命中区
+- 自定义 tooltip 与双指手势：影响小，按需
+
+### 实施前置：先抽验，再动手
+
+以上是 grep 口径的推断，**动手前先在 pad 上拔掉鼠标跑一轮主流程抽验**
+（六模块 × 新建/输入/选区/拖拽/长按/保存），拿到真实失效清单再按 P0→P1 实施，
+预计抽验半天。总量级：P0 约 3 天，P1 约 2-3 天。
