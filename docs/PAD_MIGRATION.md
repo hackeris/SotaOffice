@@ -105,15 +105,30 @@ tap→click、触摸滚动、ProseMirror/CodeMirror 文本选区与软键盘、U
 （六模块 × 新建/输入/选区/拖拽/长按/保存），拿到真实失效清单再按 P0→P1 实施，
 预计抽验半天。总量级：P0 约 3 天，P1 约 2-3 天。
 
-### 抽验第一弹结果（2026-09-27，系统级触摸注入 + 事件链探针）
+### 抽验结果（2026-09-27，pad 真机，系统级触摸注入 + 事件链探针，两轮）
 
-发现一个**比上表全部缺口更基础的 P0-0**：
+第一轮初判有坐标偏移假阴性（文档模块的 view 屏幕原点在 tab 条下方，注入坐标须加
+Y 偏移补偿；补偿标定后已全部复测）。修正后的结论：
 
-- **sheets(Univer canvas 网格) 在触摸设备上输入交互整体失效**——点击不选中、
-  无法拖拽编辑；同页面 HTML 控件触摸正常；同一 HAP 在 2in1(PC) 上交互正常。
-- 取证：触摸注入的事件链（touchstart→pointerdown→mousedown→click）以正确坐标
-  完整抵达网格 canvas（isTrusted=true），Univer 不消费；CDP 真实鼠标同样无效。
-- 定性：fork/引擎在触摸设备上的事件路径与 Univer 自绘输入层不兼容，
+| 用例 | 结果 | 说明 |
+| --- | --- | --- |
+| Home/tab 条 tap | PASS | 建文档、切 tab 均生效 |
+| markdown 正文 tap 聚焦 | PASS | TipTap `.ProseMirror` 正常获焦 |
+| docs 正文 tap 聚焦 | PASS | 同上（第一轮判 FAIL 系坐标偏移假阴性） |
+| docs 工具栏加粗 | PASS | tap 后 `strong` 落 DOM，焦点保持在编辑器 |
+| pdf 触摸滚动 | PASS | `scrollTop` 随手势变化 |
+| html 源码区聚焦 | 未定性 | 默认预览视图无源码区（0×0），非触屏问题；切源码视图后待测 |
+| **sheets 网格点击/选区** | **FAIL（P0-0）** | 见下 |
+
+**P0-0：sheets(Univer canvas 网格) 在触摸设备上输入交互整体失效**——点击不选中、
+无法拖拽编辑；同页面 DOM 内容触摸全部正常；同一 HAP 在 2in1(PC) 上交互正常。
+
+- 取证：触摸注入的事件链（touchstart→pointerdown→mousedown→click）以补偿后的精确坐标
+  完整抵达网格 canvas（isTrusted=true），Univer 不消费（点击前后截屏对照，选区不动）；
+  CDP 真实鼠标同样无效。**焦点链异常**：FOCUSIN(canvas)→FOCUSIN(某 DIV) 焦点被抢，
+  两次独立实验均伴发系统软键盘误弹。
+- 定性：fork/引擎在触摸设备上的事件路径与 Univer 自绘输入层不兼容（异常点疑在焦点分配），
   **应用侧不可修**——已入册 `UPSTREAM_FEEDBACK.md` #6（与 #1 能力上报缺失可能同源）。
 - 对 D1 的影响：在 P0-0 解决前，sheets 在纯触屏下不可用，其余触屏适配
-  （HTML5 DnD、hover 显隐等）对 sheets 无意义、对其他模块可先行。
+  （HTML5 DnD、hover 显隐等）对 sheets 无意义、对其他模块可先行——上表 P1-3/P1-4 的
+  真机复测在指针假设下结果可信，触摸侧待 P0-0 解决后随验。

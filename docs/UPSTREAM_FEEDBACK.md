@@ -73,23 +73,28 @@ maxTouchPoints   : 0
 ## 6. 触摸设备上 canvas 自绘网格的输入交互失效(同包 2in1 正常)
 
 **现象**:同一 HAP,sheets(Univer 自绘 canvas 网格)在**触摸设备(平板)**上网格点击/拖拽
-完全失效——选中单元格不动、无法编辑;同页面 **HTML 控件触摸正常**(tab 条 tap 的 click
-正常派发并生效)。**2in1(PC,无触摸)上同一交互正常**。CDP 合成鼠标事件在两台设备上
-均派发成功,但只在 PC 上改变网格状态。
+完全失效——选中单元格不动、无法编辑;同页面 **DOM 内容触摸正常**(tab 条、TipTap 编辑器
+tap 聚焦、工具栏按钮 tap 生效、PDF 触摸滚动均正常)。**2in1(PC,无触摸)上同一交互正常**。
+CDP 合成鼠标事件在两台设备上均派发成功,但只在 PC 上改变网格状态。
 
-**取证(平板,系统级触摸注入 `uinput -T`)**:
+**取证(平板,系统级触摸注入 `uinput -T`,两轮独立复测)**:
 
 ```
 事件链探针(document capture):touchstart → pointerdown(pointerType=touch)
-  → mousedown → click 全部抵达目标 canvas,isTrusted=true
-落点校验:elementFromPoint 与 canvas.getBoundingClientRect() 吻合,无坐标错位
-结果:Univer 选区不变;同操作 CDP dispatchMouseEvent 也派发成功,同样不变
-对照:同页 HTML 按钮 tap → click 派发且业务生效(切换 tab 成功)
+  → mousedown → click 全部抵达网格 canvas,isTrusted=true
+落点校验:WebContentsView 内嵌文档模块的屏幕原点在 tab 条下方(Y 偏移已标定补偿),
+  补偿后 clientX/Y 与目标网格坐标精确一致,elementFromPoint 命中主网格 canvas
+结果:Univer 选区不变(点击前后截屏对照);同操作 CDP dispatchMouseEvent 也派发成功,同样不变
+焦点链(重点):FOCUSIN(canvas) → FOCUSIN(某 DIV) —— canvas 先获焦随即被抢走,
+  最终 activeElement 停在该 DIV;两次独立实验均出现系统软键盘误弹(点击网格无输入焦点却唤起键盘)
+对照:同页 HTML 按钮 tap → click 派发且业务生效;TipTap 正文 tap 聚焦、工具栏加粗 tap 生效
 对照:PC(2in1,非触摸)上 CDP 鼠标点击网格 → 选区正常跳转(如 G16)
 其他:navigator.maxTouchPoints=0(平板页面中),与回馈 #1 的能力上报缺失一致
 ```
 
-**推断**:触摸设备上 Chromium 的事件合成/派发路径与 Univer 自绘输入层的某处不兼容
-(能力上报缺失 #1 与本条可能同源——页面拿不到真实输入形态)。应用侧无法绕过:
-事件以正确坐标到达 canvas,Univer 不消费。需 fork 侧排查触摸路径的事件构造
-(或与 #1 一并修能力上报后复测)。
+**推断**:触摸设备上 Chromium 的事件合成/派发路径与 Univer 自绘输入层的某处不兼容。
+事件本身以正确坐标完整到达 canvas,**异常点在焦点管理**——canvas 获焦后被某 DIV 抢走,
+并连带软键盘误弹;Univer 的输入层依赖自身焦点宿主,焦点链异常与选区不更新可能同因。
+(能力上报缺失 #1 与本条可能同源——页面拿不到真实输入形态。)
+应用侧无法绕过:焦点与事件都在页面内,Univer 不消费。需 fork 侧排查触摸路径的
+焦点分配/事件构造(或与 #1 一并修能力上报后复测)。
