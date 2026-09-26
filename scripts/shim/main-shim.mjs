@@ -28,7 +28,7 @@ const LOG = '/data/storage/el2/base/files/shim-log.txt'
 const EL2 = '/data/storage/el2/base/files'
 // 日志三路:①沙箱文件(hdc 读不到) ②公共 Documents(仅三目录 ACL 到位才写成功——
 // 既当日志通道,也是**ACL 生效的实证**) ③console→hilog(会被 flowcontrol 丢)
-const LOG_PUBLIC = '/storage/Users/currentUser/Documents/Sota Office/shim-log.txt'
+const LOG_PUBLIC = '/storage/Users/currentUser/Documents/Smart Office/shim-log.txt'
 const log = (m) => {
   const line = `${new Date().toISOString()} ${m}\n`
   for (const p of [LOG, LOG_PUBLIC]) {
@@ -40,7 +40,7 @@ const log = (m) => {
 log('=== main-shim v4 start ===')
 const APP_DIR = path.dirname(new URL(import.meta.url).pathname) // = resfile/resources/app
 const RESOURCES_DIR = path.join(APP_DIR, '..')                  // = resfile/resources
-const SIDECAR_RUNTIME = '/data/storage/el1/bundle/libs/arm64/xlsx-sidecar' // 运行期(无 -v8a,清单 §0)
+const NATIVE_LIBS_DIR = '/data/storage/el1/bundle/libs/arm64' // 运行期(无 -v8a,清单 §0)
 
 PROBES.rawPlatform = process.platform
 log(`probe: rawPlatform=${PROBES.rawPlatform}`)
@@ -112,11 +112,13 @@ log(`stub: app.isPackaged(raw=${PROBES.rawIsPackaged} → ${app.isPackaged})`)
 // ---- ⑦ 系统目录(documents/downloads/desktop)可写探测 + 降级 ----
 // 三目录 ACL 到手后系统目录天然可写(探测通过则不干预);未到手时写入抛错会让
 // 保存链断裂,故逐个探测并把不可写的 setPath 降级到 el2(功能不中断)。
-// documents 多探一层 Sota Office 子目录——应用的文件落点在那里。
+// documents 多探一层产品子目录——应用的文件落点在那里。改名前旧版本落点
+// Documents/Sota Office/ 不做兼容探测:旧文件经最近列表的绝对路径仍可打开。
+// fb 是系统目录不可写时 el2 沙箱内的降级目录名,同样跟随产品名。
 PROBES.paths = {}
 PROBES.pathWritable = {}
 for (const [name, sub, fb] of [
-  ['documents', 'Sota Office', 'Documents'],
+  ['documents', 'Smart Office', 'Smart Office'],
   ['downloads', '', 'Download'],
   ['desktop', '', 'Desktop'],
 ]) {
@@ -172,27 +174,19 @@ app.on('browser-window-created', (_e, win) => {
   }
 })
 
-// ---- ⑪ sidecar spawn 重映射(bundle 以属性访问形态调 child_process.spawn,先 patch 后加载即生效)----
-const SIDECAR_BUNDLED = path.join(RESOURCES_DIR, 'native', 'xlsx-sidecar')
-try { fs.accessSync(SIDECAR_RUNTIME, fs.constants.F_OK); log(`sidecar runtime 可达:${SIDECAR_RUNTIME}`) }
-catch { log(`FATAL: sidecar 运行期路径不可达 ${SIDECAR_RUNTIME}`) }
+// ---- ⑪ Native 子进程启动器预加载(原 sidecar spawn 重映射已随可执行位退役)----
+// xlsx 引擎改走系统 Native 子进程机制:HAP 不带 executableBinaryPaths(平板拒装),
+// 主进程经本启动器拉起子进程、拿 socket fd 通信。fork 的 dlopen 只认 .node 后缀,
+// 且 .node 必须早加载(窗口起来后首次 dlopen 会炸,vscodium 六件事之 6)——
+// 故在主 bundle 装载前预加载并挂到全局,sheets 客户端按全局存在与否自动选择通道
 try {
-  const { createRequire } = await import('node:module')
-  const nodeReq = createRequire(path.join(APP_DIR, 'package.json'))
-  const cp = nodeReq('node:child_process')
-  for (const fn of ['spawn', 'spawnSync']) {
-    const orig = cp[fn]
-    if (typeof orig !== 'function') continue
-    cp[fn] = function (cmd, ...rest) {
-      if (typeof cmd === 'string' && (cmd === SIDECAR_BUNDLED || cmd.endsWith('/native/xlsx-sidecar'))) {
-        log(`spawn remap hit: ${fn} → ${SIDECAR_RUNTIME}`)
-        return orig.call(cp, SIDECAR_RUNTIME, ...rest)
-      }
-      return orig.call(cp, cmd, ...rest)
-    }
-  }
-  log('stub: sidecar spawn remap installed')
-} catch (e) { log(`spawn remap 安装失败:${e?.message}`) }
+  const launcherMod = { exports: {} }
+  process.dlopen(launcherMod, path.join(NATIVE_LIBS_DIR, 'libxlsx_launcher.node'))
+  globalThis.__sotaXlsxLauncher = launcherMod.exports
+  log(`stub: xlsx launcher preloaded(${Object.keys(launcherMod.exports).join('/')})`)
+} catch (e) {
+  log(`xlsx launcher 预加载失败(客户端将回退 spawn 通道):${e?.message}`)
+}
 
 // ---- ⑬ hidden WebContentsView 移出屏幕(死区排查 2026-09-21)----
 // 症状:docs tab 打开后 ribbon"插入~视图"选项卡对系统输入(触屏/鼠标)无响应,
@@ -349,9 +343,300 @@ try {
     lastSeq = sig.seq
     log(`open-doc: signal -> ${sig.path}`)
     try { openViaControl(sig.path) } catch (e) { log(`open-doc: ${e?.message}`) }
+    // 一次性事件,消费即删:lastSeq 只活在进程内存,文件留着的话每次重启
+    // lastSeq 归零必然重放,上一次热打开的文件会开机自开(2026-09-26 实测)
+    try { fs.unlinkSync(OPEN_DOC_FILE) } catch {}
   }, 1500)
   log('stub: runtime-open-document installed')
 } catch (e) { log(`open-doc 桩安装失败:${e?.message}`) }
+
+// ---- ⑱ 真机测试文件生成(B2-B6 文件关联抽验专用;发布前移除)----
+// 由来:文件关联必须有公共目录里的真实文件,但 hdc 侧一律写不进去(2026-09-24 实测):
+//   `ls /storage/Users` 在 shell 命名空间报 No such file or directory,
+//   `hdc file send` 到同一路径报 "Error opening file: no such file or directory"
+//   —— 公共用户区对 shell 不可见。shim 跑在应用进程内,有公共目录写权(日志已证)。
+// 产物:Desktop/probe.{md,html,txt,pdf,docx,xlsx,pptx} + probe-corrupt.xlsx
+//   (畸形文件,崩溃隔离验证专用);已存在则跳过(幂等)。
+// 开关:默认关闭(产品启动路径不该生成测试文件,且 11MB 的 big.xlsx 会阻塞首屏);
+// 需要时显式 GO_TEST_FILES=1 开启。真机上文件一经生成就持久存在,回归直接复用。
+if (process.env.GO_TEST_FILES === '1') {
+  try {
+    const DESKTOP = '/storage/Users/currentUser/Desktop'
+    fs.mkdirSync(DESKTOP, { recursive: true })
+    const made = []
+    const writeIfAbsent = (name, data) => {
+      const p = path.join(DESKTOP, name)
+      if (fs.existsSync(p)) return
+      fs.writeFileSync(p, data)
+      made.push(name)
+    }
+
+    // 纯文本类:内容本身就是有效文档
+    writeIfAbsent('probe.md', Buffer.from('# 探针文档\n\n用于文件关联抽验(markdown)。\n'))
+    writeIfAbsent('probe.txt', Buffer.from('用于验证未知类型回落的纯文本。\n'))
+    writeIfAbsent(
+      'probe.html',
+      Buffer.from(
+        '<!doctype html><html><head><meta charset="utf-8"><title>probe</title></head>' +
+          '<body><h1>探针文档</h1><p>用于文件关联抽验(html)。</p></body></html>\n',
+      ),
+    )
+
+    // 最小合法 PDF:xref 各条偏移必须等于该对象在文件中的真实字节位置
+    const pdfBody = 'BT /F1 14 Tf 20 50 Td (probe) Tj ET'
+    const pdfObjs = [
+      '1 0 obj\n<</Type/Catalog/Pages 2 0 R>>\nendobj\n',
+      '2 0 obj\n<</Type/Pages/Kids[3 0 R]/Count 1>>\nendobj\n',
+      '3 0 obj\n<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 120]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>\nendobj\n',
+      `4 0 obj\n<</Length ${pdfBody.length}>>\nstream\n${pdfBody}\nendstream\nendobj\n`,
+      '5 0 obj\n<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>\nendobj\n',
+    ]
+    {
+      let out = '%PDF-1.4\n'
+      const offs = [0]
+      for (const o of pdfObjs) {
+        offs.push(Buffer.byteLength(out, 'latin1'))
+        out += o
+      }
+      const xref = Buffer.byteLength(out, 'latin1')
+      out += `xref\n0 ${pdfObjs.length + 1}\n0000000000 65535 f \n`
+      for (let i = 1; i <= pdfObjs.length; i++) {
+        out += String(offs[i]).padStart(10, '0') + ' 00000 n \n'
+      }
+      out += `trailer\n<</Size ${pdfObjs.length + 1}/Root 1 0 R>>\nstartxref\n${xref}\n%%EOF\n`
+      writeIfAbsent('probe.pdf', Buffer.from(out, 'latin1'))
+    }
+
+    // 最小 OOXML:zip 用 stored(不压缩)模式,避开 zlib 依赖
+    const crcTable = (() => {
+      const t = new Int32Array(256)
+      for (let n = 0; n < 256; n++) {
+        let c = n
+        for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
+        t[n] = c
+      }
+      return t
+    })()
+    const crc32 = (buf) => {
+      let c = -1
+      for (let i = 0; i < buf.length; i++) c = (c >>> 8) ^ crcTable[(c ^ buf[i]) & 0xff]
+      return (c ^ -1) >>> 0
+    }
+    const zipStore = (entries) => {
+      const parts = []
+      const central = []
+      let offset = 0
+      for (const [name, content] of entries) {
+        const nameBuf = Buffer.from(name, 'utf8')
+        const data = Buffer.from(content, 'utf8')
+        const crc = crc32(data)
+        const local = Buffer.alloc(30)
+        local.writeUInt32LE(0x04034b50, 0)
+        local.writeUInt16LE(20, 4)
+        local.writeUInt32LE(crc, 14)
+        local.writeUInt32LE(data.length, 18)
+        local.writeUInt32LE(data.length, 22)
+        local.writeUInt16LE(nameBuf.length, 26)
+        parts.push(local, nameBuf, data)
+        const cd = Buffer.alloc(46)
+        cd.writeUInt32LE(0x02014b50, 0)
+        cd.writeUInt16LE(20, 4)
+        cd.writeUInt16LE(20, 6)
+        cd.writeUInt32LE(crc, 16)
+        cd.writeUInt32LE(data.length, 20)
+        cd.writeUInt32LE(data.length, 24)
+        cd.writeUInt16LE(nameBuf.length, 28)
+        cd.writeUInt32LE(offset, 42)
+        central.push(cd, nameBuf)
+        offset += local.length + nameBuf.length + data.length
+      }
+      const cdBuf = Buffer.concat(central)
+      const end = Buffer.alloc(22)
+      end.writeUInt32LE(0x06054b50, 0)
+      end.writeUInt16LE(entries.length, 8)
+      end.writeUInt16LE(entries.length, 10)
+      end.writeUInt32LE(cdBuf.length, 12)
+      end.writeUInt32LE(offset, 16)
+      return Buffer.concat([...parts, cdBuf, end])
+    }
+    const XML_DECL = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    const REL_NS = 'xmlns="http://schemas.openxmlformats.org/package/2006/relationships"'
+    const CT_NS = 'xmlns="http://schemas.openxmlformats.org/package/2006/content-types"'
+    const REL_DEFAULTS =
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>'
+    const rootRels = (target) =>
+      `${XML_DECL}<Relationships ${REL_NS}><Relationship Id="rId1" ` +
+      `Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" ` +
+      `Target="${target}"/></Relationships>`
+
+    writeIfAbsent(
+      'probe.docx',
+      zipStore([
+        [
+          '[Content_Types].xml',
+          `${XML_DECL}<Types ${CT_NS}>${REL_DEFAULTS}` +
+            '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+        ],
+        ['_rels/.rels', rootRels('word/document.xml')],
+        [
+          'word/document.xml',
+          `${XML_DECL}<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
+            '<w:body><w:p><w:r><w:t>探针文档 (docx)</w:t></w:r></w:p></w:body></w:document>',
+        ],
+      ]),
+    )
+    writeIfAbsent(
+      'probe.xlsx',
+      zipStore([
+        [
+          '[Content_Types].xml',
+          `${XML_DECL}<Types ${CT_NS}>${REL_DEFAULTS}` +
+            '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+            '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>',
+        ],
+        ['_rels/.rels', rootRels('xl/workbook.xml')],
+        [
+          'xl/workbook.xml',
+          `${XML_DECL}<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ` +
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+            '<sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>',
+        ],
+        [
+          'xl/_rels/workbook.xml.rels',
+          `${XML_DECL}<Relationships ${REL_NS}><Relationship Id="rId1" ` +
+            'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" ' +
+            'Target="worksheets/sheet1.xml"/></Relationships>',
+        ],
+        [
+          'xl/worksheets/sheet1.xml',
+          `${XML_DECL}<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
+            '<sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>probe</t></is></c></row></sheetData></worksheet>',
+        ],
+      ]),
+    )
+    writeIfAbsent(
+      'probe.pptx',
+      zipStore([
+        [
+          '[Content_Types].xml',
+          `${XML_DECL}<Types ${CT_NS}>${REL_DEFAULTS}` +
+            '<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>' +
+            '<Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/></Types>',
+        ],
+        ['_rels/.rels', rootRels('ppt/presentation.xml')],
+        [
+          'ppt/presentation.xml',
+          `${XML_DECL}<p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ` +
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
+            'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' +
+            '<p:sldIdLst><p:sldId id="256" r:id="rId1"/></p:sldIdLst>' +
+            '<p:sldSz cx="9144000" cy="6858000"/></p:presentation>',
+        ],
+        [
+          'ppt/_rels/presentation.xml.rels',
+          `${XML_DECL}<Relationships ${REL_NS}><Relationship Id="rId1" ` +
+            'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" ' +
+            'Target="slides/slide1.xml"/></Relationships>',
+        ],
+        [
+          'ppt/slides/slide1.xml',
+          `${XML_DECL}<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ` +
+            'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' +
+            '<p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>' +
+            '<p:grpSpPr/><p:sp><p:nvSpPr><p:cNvPr id="2" name="Title"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>' +
+            '<p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>probe</a:t></a:r></a:p></p:txBody>' +
+            '</p:sp></p:spTree></p:cSld></p:sld>',
+        ],
+      ]),
+    )
+    // 畸形文件(崩溃隔离验证)已下线:probe-corrupt.xlsx 曾被当作正常文档误打开,
+    // 弹「invalid Zip archive」错误造成误会(2026-09-26)。该用例已验证通过,
+    // 如需复验,临时手工构造即可。
+
+    // 大文件抽验(workbook:select 偶发超时排查专用,与探针同批移除):
+    // 40 万单元格(1000 行 × 400 列,sheet XML ~11MB,stored 不压缩)。
+    // 量级参照:真实世界的大表格多在 10 万~百万格之间。
+    if (!fs.existsSync(path.join(DESKTOP, 'big.xlsx'))) {
+      const colName = (n) => {
+        let s = ''
+        while (n > 0) { s = String.fromCharCode(65 + ((n - 1) % 26)) + s; n = Math.floor((n - 1) / 26) }
+        return s
+      }
+      const rows = []
+      for (let r = 1; r <= 1000; r++) {
+        let cells = ''
+        for (let c = 1; c <= 400; c++) cells += `<c r="${colName(c)}${r}"><v>${r * c}</v></c>`
+        rows.push(`<row r="${r}">${cells}</row>`)
+      }
+      writeIfAbsent(
+        'big.xlsx',
+        zipStore([
+          [
+            '[Content_Types].xml',
+            `${XML_DECL}<Types ${CT_NS}>${REL_DEFAULTS}` +
+              '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+              '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>',
+          ],
+          ['_rels/.rels', rootRels('xl/workbook.xml')],
+          [
+            'xl/workbook.xml',
+            `${XML_DECL}<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ` +
+              'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+              '<sheets><sheet name="Big" sheetId="1" r:id="rId1"/></sheets></workbook>',
+          ],
+          [
+            'xl/_rels/workbook.xml.rels',
+            `${XML_DECL}<Relationships ${REL_NS}><Relationship Id="rId1" ` +
+              'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" ' +
+              'Target="worksheets/sheet1.xml"/></Relationships>',
+          ],
+          [
+            'xl/worksheets/sheet1.xml',
+            `${XML_DECL}<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
+              `<sheetData>${rows.join('')}</sheetData></worksheet>`,
+          ],
+        ]),
+      )
+    }
+
+    // 应力抽验(workbook:select 偶发超时排查专用,与探针同批移除):
+    // 6 个内容相同、路径不同的小 xlsx——打开链路有同路径去重(已开即聚焦),
+    // 连续开关循环必须用不同文件才能每次都真正走到 sidecar。
+    const stressSheet = (n) => [
+      [
+        '[Content_Types].xml',
+        `${XML_DECL}<Types ${CT_NS}>${REL_DEFAULTS}` +
+          '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+          '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>',
+      ],
+      ['_rels/.rels', rootRels('xl/workbook.xml')],
+      [
+        'xl/workbook.xml',
+        `${XML_DECL}<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ` +
+          'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+          `<sheets><sheet name="S${n}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+      ],
+      [
+        'xl/_rels/workbook.xml.rels',
+        `${XML_DECL}<Relationships ${REL_NS}><Relationship Id="rId1" ` +
+          'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" ' +
+          'Target="worksheets/sheet1.xml"/></Relationships>',
+      ],
+      [
+        'xl/worksheets/sheet1.xml',
+        `${XML_DECL}<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
+          `<sheetData><row r="1"><c r="A1"><v>${n}</v></c></row></sheetData></worksheet>`,
+      ],
+    ]
+    for (let n = 1; n <= 6; n++) writeIfAbsent(`stress${n}.xlsx`, zipStore(stressSheet(n)))
+
+    PROBES.testFiles = made
+    log(made.length ? `test-files: 已生成 ${made.join(', ')}` : 'test-files: 均存在,跳过')
+  } catch (e) {
+    log(`test-files 桩失败:${e?.message}`)
+  }
+}
 
 // ---- ⑫(预案)Tray 兜底 ----
 if (process.env.GO_SHIM_TRAY === '1') {
