@@ -11,7 +11,8 @@
 
 ### ~~应用名和包名对不上~~（已完成）
 
-`app_name` 与各 Ability 标签已全部改为 `Sota Office`（2026-09-25 品牌落地提交）。
+`app_name` 与各 Ability 标签现为 **Smart Office**（2026-09-26 更名定稿；
+bundleName `app.fuqidian.sotaoffice` 保持不变）。
 
 ### TaskManagerAbility 没被声明
 
@@ -86,11 +87,20 @@ clone 的。那是别人维护的仓，**不可控**——仓一旦消失或布�
 HAP 三百多兆，而应用商店对单包体积有上限（具体数值待确认）。
 一个可选的思路是切到官方的 electron-builder 方案，但那还是手工脚本阶段，没评估过。
 
+### CDP 调试通道对发布包是开着的
+
+`sync-engine.sh` 生成 `dev_config.json` 时 `remote-debugging: true` 硬编码（端口 9333），
+CDP 能读到页面内容、执行任意 JS——开发期是唯一的验证通道，但**发布包必须关**
+（或做成构建参数，release 缺省关）。登记在 `SOTA_RELEASE_TODO.md` §5.7。
+
 ### 法务
 
 NOTICE 文件和隐私政策的内容需要法务确认。遥测已关闭（代码保留、本构建不注入 key，`initAnalytics()` 是 no-op 桩），隐私文档与隐私政策要跟着这个口径改——同步项挂在 `SOTA_RELEASE_TODO.md` §4.2 / §6.3。
 
 ### 去上游化还没做完
 
-`SOTA_RELEASE_TODO.md` §9 的"阶段三"还挂着：i18n 品牌文案（六十多个文件）、
-`GenSparkAccountStatus` 类型和对应 channel 的残留、未配置 AI 时的引导界面。
+`SOTA_RELEASE_TODO.md` §9 的"阶段三"还挂着：i18n 品牌文案（GenOffice 残留
+约 437 处，2026-09-26 口径）、`GenSparkAccountStatus` 类型和对应 channel 的残留、
+未配置 AI 时的引导界面。产品显示名已定稿 **Smart Office**（2026-09-26），
+用户可见面（窗口/tab 标题、About 菜单、首页欢迎语、默认保存目录、AI 提示词自称）
+已替换完毕，bundleName 不变。

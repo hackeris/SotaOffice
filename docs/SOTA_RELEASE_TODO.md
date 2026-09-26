@@ -1,8 +1,8 @@
-# Sota Office 发布前改造 TODO
+# Smart Office 发布前改造 TODO
 
-以 **Sota Office** 品牌独立发布（鸿蒙 HAP，可选桌面）前，要清掉上游 genspark 的服务与品牌残留。
+以 **Smart Office** 品牌独立发布（鸿蒙 HAP，可选桌面）前，要清掉上游 genspark 的服务与品牌残留。
 
-> 制定 2026-09-24 | 更新 2026-09-25
+> 制定 2026-09-24 | 更新 2026-09-26（产品显示名定稿 Smart Office，bundleName 不变）
 > **决策依据**（为什么选 `glm`、为什么补 `bocha`）见 `SOTA_DECISIONS.md`
 > 路径约定：相对 `thirdparty/genoffice/` 记作 `G/`；本仓壳工程记作 `S/`
 
@@ -12,18 +12,18 @@
 
 | # | 剩余项 | 章节 | 规模 / 备注 |
 | --- | --- | --- | --- |
-| 1 | **品牌文案批量替换** | §3 | 约 1410 处，横跨 228 个文件 × 20 语言 |
-| 2 | 品牌元信息、窗口标题、About | §3.1–3.3 | appId 变更会影响钥匙串/签名链 |
-| 3 | AI 面板品牌与图标 | §3.4 | 用户直接可见 |
-| 4 | 外链与 Star 推广 | §3.7–3.9 | 6 个上游端点 |
-| 5 | AI 品牌标识（UA、Codex 提示词、代理探测） | §2.9–2.11 | 已核实：三处都还是旧品牌 |
-| 6 | 遥测文档与隐私政策同步 | §4.2、§6.3 | 与 §4.1 强绑定 |
-| 7 | 自动更新模块移除 | §4.3–4.4 | 鸿蒙侧整体移除，走应用市场 |
-| 8 | 字体 CDN、GenTeam 社区 | §4.5–4.6 | 换自有或删除 |
-| 9 | 壳工程收尾（应用名、Ability 标签、版本号） | §5.1–5.3、5.5–5.6 | |
-| 10 | 发布合规 | §6 | 需法务确认 NOTICE 措辞 |
-| 11 | 未配置 AI 时的界面引导 | §9 阶段三 | 替代原来的登录引导 |
-| 12 | 搜索改动里的 UI 与 i18n 部分 | §0.2 清单 | 需确认是否随阶段一一起落地了 |
+| 1 | **品牌文案批量替换** | §3 | GenOffice 残留实测约 437 处（2026-09-26 口径，已剔除内部标识）；多数与死键清理（§3 删码类）交织 |
+| 2 | 品牌元信息（appId、AI 面板品牌与图标） | §3.1、§3.4 | appId 变更会影响钥匙串/签名链 |
+| 3 | 外链与 Star 推广 | §3.7–3.9 | 6 个上游端点 |
+| 4 | AI 品牌标识（UA、代理探测；Codex 提示词已清） | §2.9、§2.11 | |
+| 5 | 遥测文档与隐私政策同步 | §4.2、§6.3 | 与 §4.1 强绑定 |
+| 6 | 自动更新模块移除 | §4.3–4.4 | 鸿蒙侧整体移除，走应用市场 |
+| 7 | 字体 CDN、GenTeam 社区 | §4.5–4.6 | 换自有或删除 |
+| 8 | 壳工程收尾（版本号、权限 reason、HAP 体积） | §5.3、5.5–5.6 | 应用名/标签/图标已收口 |
+| 9 | 发布合规 | §6 | 需法务确认 NOTICE 措辞 |
+| 10 | 未配置 AI 时的界面引导 | §9 阶段三 | 替代原来的登录引导 |
+| 11 | 搜索改动里的 UI 与 i18n 部分 | §0.2 清单 | 需确认是否随阶段一一起落地了 |
+| 12 | **CDP 调试通道构建开关** | §5.7（新增） | 发布包当前 `remote-debugging: true`（9333 对外开放），发布前必须关闭或参数化 |
 
 进度详情见 §9。
 
@@ -71,7 +71,7 @@
 | 2.7 🟡 | 未登录错误文案（20 语言） | `docs-main.ts:200` 起；各 app `i18n/ai/*.ts` | 改"未配置 AI 后端 + 打开设置"；`errGskCli` 已改名 `errAiProviderUnset`，文案待改 |
 | 2.8 ✅ | gsk 登录态门禁按钮（4 个编辑器 AI 面板） | 各 `AiPanel.tsx` + `ai:gsk-status`/`ai:gsk-login` 通道 | 随 1.2 移除 |
 | **2.9** ⬜ | **AI User-Agent** | `G/packages/ai-provider/src/fetch.ts:25`（`AI_DEFAULT_USER_AGENT = 'GenOffice'`） | 改为 `SotaOffice/<version>` |
-| **2.10** ⬜ | **Codex CLI 提示词自称 GenOffice** | `G/packages/ai-provider/src/codex-app-server.ts:65,376` | 换品牌，或默认隐藏该 provider |
+| ~~2.10~~ ✅ | ~~Codex CLI 提示词自称 GenOffice~~ | `G/packages/ai-provider/src/codex-app-server.ts:65,376` | 已换 Smart Office（2026-09-26）；`<genoffice_payload>` 属内部标识不动 |
 | **2.11** ⬜ | **代理探测硬编码 genspark.ai** | `G/apps/shell/src/main/index.ts:4525`、`slides-main.ts:4651-4652` | 换自有域名或删（机制可保留） |
 
 ## 3. 品牌与文案 ⬜ 待做
@@ -96,8 +96,8 @@
 | # | 项 | 位置 | 动作 |
 | --- | --- | --- | --- |
 | 3.1 | 应用元信息 | `electron-builder.cjs:235-236`（appId `com.genoffice.app`、productName）、`:496-497`、`:511,535,553`；各 app `package.json` | 换品牌（**appId 变更影响钥匙串/签名链**） |
-| 3.2 | 窗口与 HTML 标题（7 处） | `index.ts:2470`；7 个 `renderer/index.html:10` | 换 |
-| 3.3 | About 对话框 + 菜单标签（20 语言） | `app-menu.ts:580-591`（硬编码）、`:48,73` 及全 locale 块 | 换 |
+| ~~3.2~~ ✅ | ~~窗口与 HTML 标题（7 处）~~ | `index.ts:2470`；7 个 `renderer/index.html:10` | 已换 Smart Office（2026-09-26） |
+| ~~3.3~~ ✅ | ~~About 对话框 + 菜单标签（20 语言）~~ | `app-menu.ts:580-591`（硬编码）、`:48,73` 及全 locale 块 | 已换 Smart Office（2026-09-26） |
 | 3.4 | AI 面板品牌（用户直接可见） | docs `Ribbon.tsx:2857,2957`、`AiPanel.tsx:1216,1244,1248-1249`；slides `App.tsx:3290,3628-3629`；markdown `AiPanel.tsx:746-751`；图标 `GensparkMark`；`i18n/ai/*` 的 `aiPanelTitle` | 换自有 AI 品牌 + 新图标 |
 | 3.5 | 字体族名（用户可见） | `GenOffice Sans/Serif/Gothic KR`、`Poppins/Che Latin KR` | 换名（注意 docx 兼容映射联动） |
 | 3.6 | Logo 与图标资产 | `assets/genoffice-logo.svg`、`app-icon.png`、`build/icons/*` | 换 Sota 资产 |
@@ -105,8 +105,8 @@
 | 3.8 | Star 推广机制 | `star-prompt.ts`（全文）、`StarPromptCard.tsx`、`SettingsModal.tsx:1188-1206` | 独立发布建议整体移除 |
 | ~~3.9~~ | ~~Integrations 安装命令~~ | — | **作废**：集成页已随账号链整体移除；需清掉残留的测试导入（`apps/shell/tests/settings-integrations.test.ts` 仍引用已不存在的 `IntegrationsPane`） |
 | 3.10 | CLI/MCP/SKILL 命名 | `skills/genoffice/SKILL.md`、`cli/src/agent-skills.ts:25`、`result.ts:149`、`commands/mcp.ts:8`、`fs.ts:37`、`cli-link.ts`、MCP 示例名 | 换品牌（技能名变更需发布迁移） |
-| 3.11 | 默认保存目录 | `G/apps/shell/src/shared/home-api.ts:191`（实现落在 `packages/electron-utils/src/default-save-dir.ts`） | 换 `<Documents>/Sota Office`——**注意 shim 里的日志路径与 documents 探测路径用的是同一个目录名，要同步改** |
-| 3.12 | 零散硬编码品牌 | `control-handlers.ts:45`、`NoteMargin.tsx:168,302`、`pdf-skill.ts:5`、`strings-zotero.ts` | 换 |
+| ~~3.11~~ ✅ | ~~默认保存目录~~ | `G/apps/shell/src/shared/home-api.ts:191`（实现落在 `packages/electron-utils/src/default-save-dir.ts`） | 已落地 `Documents/Smart Office`（2026-09-26），shim 日志与探测路径已同步；旧 `Sota Office` 目录不迁移，经最近列表绝对路径仍可打开 |
+| 3.12 🟡 | 零散硬编码品牌 | `control-handlers.ts:45`、`NoteMargin.tsx:168,302` 已清；剩 `pdf-skill.ts:5`、`strings-zotero.ts`（20 语言）等——同属 §3 大盘的 GenOffice 残留（约 437 处，见下） | 随 §3 i18n 批量替换一并做 |
 
 ## 4. 遥测 · 更新 · 云 🟡 4.1 已完成
 
@@ -124,12 +124,13 @@
 
 | # | 项 | 位置 | 动作 |
 | --- | --- | --- | --- |
-| 5.1 ⬜ | 应用名 | `S/AppScope/resources/base/element/string.json`（`app_name: "GenOffice"`） | → `Sota Office` |
-| 5.2 ⬜ | Ability 标签/描述 | `S/entry/src/main/resources/base/element/string.json`（7 处） | → Sota 品牌 |
+| ~~5.1~~ ✅ | ~~应用名~~ | `S/AppScope/resources/base/element/string.json` | 已为 Smart Office（2026-09-26 更名，bundleName `app.fuqidian.sotaoffice` 不变） |
+| ~~5.2~~ ✅ | ~~Ability 标签/描述~~ | `S/entry/src/main/resources/base/element/string.json`（9 处） | 已为 Smart Office（2026-09-26） |
 | 5.3 ⬜ | 版本号 | `S/AppScope/app.json5`（`versionName: "0.1.0"`、`versionCode: 1000000`） | 定发布版本 |
-| 5.4 ✅ | 应用图标 | `S/AppScope/resources/base/media/*`、`entry/.../app_icon.png` | 已换（黑底白 G，`scripts/gen-icons.py` 生成；有品牌图后重生成） |
+| ~~5.4~~ ✅ | ~~应用图标~~ | `S/AppScope/resources/base/media/*`、`entry/.../app_icon.png` | 三色 mark（橙红/绿/蓝 + AI 之眼），`docs/media/gen-sota-icon.mjs` 单一事实源生成（SCALE 1.36，2026-09-26 放大定稿） |
 | 5.5 ⬜ | 权限 reason 文案 | `S/web_engine/src/main/resources/{base,zh_CN,en_US}/element/string.json` | 复核措辞（上架需要） |
 | 5.6 ⬜ | HAP 体积核对 | 当前约 328MB | 与商店单包上限核对；必要时裁 modules/cli |
+| 5.7 ⬜ | **CDP 调试通道开关** | `S/scripts/sync-engine.sh:56-57`（生成 `entry/libs/arm64-v8a/dev_config.json`，`remote-debugging: true` 硬编码 9333） | 发布包必须关闭或改为构建参数（`--release` 缺省关）；开发期保持开启 |
 
 > `vendor` 与 `app_name` 的现状在 `OPEN_ITEMS.md` 也登记了一份，那两份保持同步。
 
@@ -228,8 +229,9 @@ ai-search 20 测试通过（media-tools 测试重写为 BYOK 语义）。
 
 - **i18n 品牌文案**（§3）：各 app 的 `aiGskLoginBtn` 等 gsk 文案（60 个文件）、
   slides 的 `errGskNotLoggedIn`（`errGskCli` 已改名 `errAiProviderUnset`，文案待改）、
-  以及上表统计的 1410 处 genspark 提及
+  以及 GenOffice 残留约 437 处（2026-09-26 口径）；窗口标题/About 菜单/默认保存目录/
+  壳工程应用名等零散硬编码已先行清完（2026-09-26）
 - **shared/ipc 与 preload 的类型残留**：`ai:gsk-status` channel 常量、
   `GenSparkAccountStatus` 类型（现无 main handler，调用会 reject）
-- **AI 品牌标识**：§2.9–2.11 三处
+- **AI 品牌标识**：§2.9（UA）、§2.11（代理探测）；§2.10 Codex 提示词已清
 - **UI 面板引导**：未配置 AI 时给"去设置配置模型服务"提示（替代原登录引导）

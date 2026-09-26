@@ -1,6 +1,6 @@
 # 品牌替换方案
 
-把上游的 **GenOffice** / **Genspark** 牌子换成 **Sota Office**。
+把上游的 **GenOffice** / **Genspark** 牌子换成 **Smart Office**。
 要执行的任务清单在 `SOTA_RELEASE_TODO.md` §3，本文讲**怎么做**。
 
 ## 一、先分清三类
@@ -26,11 +26,11 @@
 
 | 场合 | 现在 | 改成 | 说明 |
 | --- | --- | --- | --- |
-| 产品显示名 | `GenOffice` | **`Sota Office`** | 带空格，用于标题、About、菜单 |
-| 紧凑形式 | `GenOffice` | **`SotaOffice`** | 不带空格，用于 UA、标识符、包名段 |
-| 包名 | `com.genoffice.app` | `app.fuqidian.sotaoffice` | HAP 侧已经是新的了 |
-| 默认保存目录 | `Documents/GenOffice` | `Documents/Sota Office` | **跨仓联动，见 §5** |
-| 窗口标题 | `GenOffice Docs` 等 7 处 | `Sota Office Docs` 等 | `<title>` + 主进程 `title:` |
+| 产品显示名 | `GenOffice` | **`Smart Office`** | 带空格，用于标题、About、菜单 |
+| 紧凑形式 | `GenOffice` | **`SmartOffice`** | 不带空格，用于 UA、标识符、包名段 |
+| 包名 | `com.genoffice.app` | `app.fuqidian.sotaoffice` | HAP 侧已经是新的了；**bundleName 不随显示名变** |
+| 默认保存目录 | `Documents/GenOffice` | `Documents/Smart Office` | **跨仓联动，见 §5**；已落地 |
+| 窗口标题 | `GenOffice Docs` 等 7 处 | `Smart Office Docs` 等 | `<title>` + 主进程 `title:`；已落地 |
 | AI 面板品牌 | `Genspark` | **`AI`** | 不引入第二个品牌。见 `ribbonAiAssistant` / `aiPanelTitle` |
 | AI User-Agent | `GenOffice` | `SotaOffice/<version>` | |
 | MCP server name | `GenOffice` | `SotaOffice` | MCP 客户端里能看见 |
