@@ -104,3 +104,16 @@ tap→click、触摸滚动、ProseMirror/CodeMirror 文本选区与软键盘、U
 以上是 grep 口径的推断，**动手前先在 pad 上拔掉鼠标跑一轮主流程抽验**
 （六模块 × 新建/输入/选区/拖拽/长按/保存），拿到真实失效清单再按 P0→P1 实施，
 预计抽验半天。总量级：P0 约 3 天，P1 约 2-3 天。
+
+### 抽验第一弹结果（2026-09-27，系统级触摸注入 + 事件链探针）
+
+发现一个**比上表全部缺口更基础的 P0-0**：
+
+- **sheets(Univer canvas 网格) 在触摸设备上输入交互整体失效**——点击不选中、
+  无法拖拽编辑；同页面 HTML 控件触摸正常；同一 HAP 在 2in1(PC) 上交互正常。
+- 取证：触摸注入的事件链（touchstart→pointerdown→mousedown→click）以正确坐标
+  完整抵达网格 canvas（isTrusted=true），Univer 不消费；CDP 真实鼠标同样无效。
+- 定性：fork/引擎在触摸设备上的事件路径与 Univer 自绘输入层不兼容，
+  **应用侧不可修**——已入册 `UPSTREAM_FEEDBACK.md` #6（与 #1 能力上报缺失可能同源）。
+- 对 D1 的影响：在 P0-0 解决前，sheets 在纯触屏下不可用，其余触屏适配
+  （HTML5 DnD、hover 显隐等）对 sheets 无意义、对其他模块可先行。

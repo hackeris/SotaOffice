@@ -11,6 +11,7 @@
 | 3 | `dialog.showSaveDialog` 的 `defaultPath` 文件名不回填 | 实测 + 定位 | 中:保存体验 |
 | 4 | `setTitleBarOverlay` 与 WCO(`env(titlebar-area-*)`)缺失 | 实测 | 中:自绘按钮可绕但需避让数据 |
 | 5 | `webContents.print()` 无实现(PrintAdapter TODO) | 源码 | 中:可降级为导出 PDF |
+| 6 | 触摸设备上 canvas 自绘网格(如 Univer)的输入交互失效 | 实测(含事件链探针) | 高:表格类应用在触屏设备不可用 |
 
 ---
 
@@ -68,3 +69,27 @@ maxTouchPoints   : 0
 **现象**:`apps/*/src/main` 中四处打印调用(`docs`、`sheets`、`slides`、`pdf`)在 fork 上无对应实现(PrintAdapter TODO),打印链路不可用。
 
 **影响**:文档"打印"功能失效;可用 `printToPDF`(已支持)降级为"导出 PDF"。
+
+## 6. 触摸设备上 canvas 自绘网格的输入交互失效(同包 2in1 正常)
+
+**现象**:同一 HAP,sheets(Univer 自绘 canvas 网格)在**触摸设备(平板)**上网格点击/拖拽
+完全失效——选中单元格不动、无法编辑;同页面 **HTML 控件触摸正常**(tab 条 tap 的 click
+正常派发并生效)。**2in1(PC,无触摸)上同一交互正常**。CDP 合成鼠标事件在两台设备上
+均派发成功,但只在 PC 上改变网格状态。
+
+**取证(平板,系统级触摸注入 `uinput -T`)**:
+
+```
+事件链探针(document capture):touchstart → pointerdown(pointerType=touch)
+  → mousedown → click 全部抵达目标 canvas,isTrusted=true
+落点校验:elementFromPoint 与 canvas.getBoundingClientRect() 吻合,无坐标错位
+结果:Univer 选区不变;同操作 CDP dispatchMouseEvent 也派发成功,同样不变
+对照:同页 HTML 按钮 tap → click 派发且业务生效(切换 tab 成功)
+对照:PC(2in1,非触摸)上 CDP 鼠标点击网格 → 选区正常跳转(如 G16)
+其他:navigator.maxTouchPoints=0(平板页面中),与回馈 #1 的能力上报缺失一致
+```
+
+**推断**:触摸设备上 Chromium 的事件合成/派发路径与 Univer 自绘输入层的某处不兼容
+(能力上报缺失 #1 与本条可能同源——页面拿不到真实输入形态)。应用侧无法绕过:
+事件以正确坐标到达 canvas,Univer 不消费。需 fork 侧排查触摸路径的事件构造
+(或与 #1 一并修能力上报后复测)。
