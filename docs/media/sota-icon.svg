@@ -1,0 +1,15 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1024" height="1024" fill="#FFFFFF"/>
+  <defs>
+    <clipPath id="a">
+      <rect x="174" y="195" width="522" height="522" rx="123"/>
+    </clipPath>
+  </defs>
+  <rect x="174" y="195" width="522" height="522" rx="123" fill="#c65444"/>
+  <rect x="328" y="307" width="522" height="522" rx="123" fill="#64a178"/>
+  <g clip-path="url(#a)">
+    <rect x="328" y="307" width="522" height="522" rx="123" fill="#5183c3"/>
+  </g>
+  <ellipse cx="458" cy="463" rx="24" ry="32" fill="#FFFFFF"/>
+  <ellipse cx="566" cy="463" rx="24" ry="32" fill="#FFFFFF"/>
+</svg>

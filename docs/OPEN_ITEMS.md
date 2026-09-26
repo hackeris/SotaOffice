@@ -5,18 +5,13 @@
 
 ## 一、配置与元数据没收尾
 
-### `vendor` 还是占位符
+### ~~`vendor` 还是占位符~~（已完成）
 
-`AppScope/app.json5` 里 `vendor: "example"`，从模板带过来的，一直没改。
-**影响**：上架审核会卡。
-**做法**：换成真实厂商名。
+`AppScope/app.json5` 已改为 `vendor: "Fuqidian"`（2026-09-25 品牌落地提交）。
 
-### 应用名和包名对不上
+### ~~应用名和包名对不上~~（已完成）
 
-包名已经是 `app.fuqidian.sotaoffice`，而 `AppScope/resources/base/element/string.json`
-里的 `app_name` 还是 **`GenOffice`**。桌面图标下面显示的就是这个名字。
-**影响**：用户看到的名字和产品名不一致。
-**做法**：这是去上游化改造的一部分，和 i18n 文案一起处理。
+`app_name` 与各 Ability 标签已全部改为 `Sota Office`（2026-09-25 品牌落地提交）。
 
 ### TaskManagerAbility 没被声明
 
@@ -29,17 +24,13 @@ EntryAbility、BrowserAbility、StatelessAbility）。
 所以这个名字本身就是引擎契约的一部分。**动手前先查清楚它该不该在。**
 **做法**：确认后，要么补声明，要么删文件。
 
-### About 页的第三方声明没生成
+### ~~About 页的第三方声明没生成~~（已完成）
 
-`THIRD-PARTY-NOTICES.txt` 当前不存在。构建时会提示：
-
-```
-提示: 无 THIRD-PARTY-NOTICES.txt(跑 npm run notices 生成;About 页缺失,不阻塞)
-```
-
-**影响**：About 对话框里看不到第三方声明。不阻塞运行，但上架合规需要它。
-**做法**：在应用仓库里跑 `npm run notices`，产物是 `apps/shell/build/THIRD-PARTY-NOTICES.txt`，
-`build-genoffice.sh` 会自动拷进 resfile。
+`npm run notices` 已跑通并随 HAP 分发（2026-09-26）：含上游项目章节
+（GenOffice Apache-2.0 全文 + NOTICE 要点、Electron for OpenHarmony MIT 全文）
++ 610 个 npm 包 + 144 个 Rust crate。生成器对 OHOS 构建机的适配
+（electron 二进制缺失容忍等）见 `tools/gen-third-party-notices.mjs`。
+关于页另有上游致谢两行（链接经 openExternal 打开）。
 
 ### `webContents.print` 降级没落地
 
