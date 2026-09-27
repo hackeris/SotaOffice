@@ -123,20 +123,27 @@ Konva 等只消费坐标的 canvas 库不受影响。
 
 **事件层已查清(合成事件本身正常)**:iframe 内探针逐项核对——clientX/Y 精确、
 screenX/Y 换算正确(screenY×dpr=注入物理坐标)、offsetX/Y 与 pageX/Y 自洽、
-click.detail=1、buttons 正确、pointerId/pointerType(touch)正常、
-isTrusted=true、时序为标准的 pointerup→mousedown→mouseup→click。
+click.detail=1、buttons 正确、pointerId/pointerType 正常、isTrusted=true、
+时序为标准的 pointerup→mousedown→mouseup→click;CDP 内部通道合成的鼠标事件
+(pointerType=mouse,不经触摸桥接层)同样完整到达网格 canvas,Univer 同样不消费。
 (Univer 内部会对容器收到的 pointerdown 向 canvas 重派发一次 isTrusted=false
 的转发,非 fork 重复派发。)
 
-**根因候选(从"合成事件异常"修正为"设备能力上报缺失",与 #1 同源)**:
-触屏平板页面上 `matchMedia` 全错——`(pointer: coarse)=false、
-(any-pointer: coarse)=false、(pointer: fine)=false、(hover: hover)=false、
-maxTouchPoints=0、'ontouchstart' in window=false`——页面看到的是一台
-"无任何输入设备的幽灵机器"。机制假设:Univer 等组件在初始化时探测触屏能力
-选择交互模式,能力全空 → 桌面模式状态机 + touch pointerType 事件 →
-走错分支(tap 被当作输入)。旁证:应用侧曾注入 `maxTouchPoints=5`+
-`ontouchstart` 补丁仍失效——`matchMedia` 由 Blink 内部评估,JS 无法覆盖,
-单点补丁救不了多路径探测。
-**修复价值**:补齐输入设备能力上报(触摸屏设备枚举 + media query 值 +
-maxTouchPoints)有望一并解决 #1(响应式 CSS 全面误判)与本条,以及依赖
-`(hover: none)` 分支的触屏 UI 适配。
+**现象边界(重要)**:用户外接鼠标实测,pad 上表格网格**鼠标同样无法操作**
+——失效与输入类型无关(触摸/外接鼠标/CDP 合成全灭),是 tablet 形态下
+网格输入消费的整体失效。PC(2in1) 真鼠标一切正常。
+
+**已逐项排除的假设(均为实测,供 fork 侧缩小范围)**:
+- 设备能力伪装:JS 层全量伪造(pointer:coarse/hover:none 的 matchMedia hook、
+  maxTouchPoints=5、ontouchstart、TouchEvent)后 Univer 仍失效
+  —— 注:matchMedia 能力上报缺失(#1)仍成立,但不是本条的门卫
+- rAF 停摆:两端均 60fps 正常
+- Page Visibility:两端均出现 visibilityState=hidden 的怪癖(波动),
+  但 PC 输入正常,与失效不相关
+- 双击误判(click.detail 累积)、事件重复派发(isTrusted 区分后排除)
+- dpr 坐标换算:canvas backing/client 比率与 dpr 自洽
+
+**当前定性**:tablet 形态下,事件以正常形态到达页面 canvas 而 Univer 状态机
+不消费,输入类型无关;机制在页面可观察面之外,需 fork 侧对照同页 ArkWeb
+(正常)与 fork(失效)的输入管线内部状态排查。应用侧已无可行自救
+(伪装/翻译/内部合成全试)。

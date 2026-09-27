@@ -69,7 +69,7 @@ launcher ELF 在 2in1 上也没有 exec 消费者，可执行位对两端都是�
 | 平板安装（证伪点） | 通过：统一包平板可装、可启动、可日常使用 |
 | 启动点亮（shim/CDP/多模块渲染） | 通过：双端多次冷启动验证，无开机自开文档等启动期异常 |
 | 六类型文件回归 | 通过 4 类：xlsx（磁盘打开→引擎加载→渲染）/ md / html（静默保存→磁盘重开→内容命中）/ pdf（落盘→打开→页指示），脚本 `scripts/e2e/six-type-regression.mjs`；**docx、pptx 与 xlsx 写回无设备级用例**（设备端无文件注入通道，写回无生产包 e2e 通道，见脚本头注释） |
-| 触屏交互 | 未专项适配（缺口分析见 §6）：应用是桌面指针假设，平板以外接鼠标/触控板使用 |
+| 触屏交互 | 未专项适配（缺口分析见 §6）；注意 sheets 网格在 pad 上鼠标同样不可操作（见 P0-0），「外接鼠标过渡」对表格不成立 |
 | 窗口形态（悬浮窗/分屏）、内存性能、坚盾守护模式 | 未专项验证 |
 
 ## 6. 触屏交互缺口分析（2026-09-26，代码证据口径）
@@ -121,25 +121,20 @@ Y 偏移补偿；补偿标定后已全部复测）。修正后的结论：
 | slides 选中图形、拖拽元素 | PASS | 人工触控实测（Konva，同为 canvas 自绘） |
 | **sheets 网格点击/选区** | **FAIL（P0-0）** | 见下 |
 
-**P0-0：sheets(Univer canvas 网格) 在触摸设备上输入交互整体失效**——点击不选中、
-无法拖拽编辑；同页面 DOM 内容触摸全部正常；同一 HAP 在 2in1(PC) 上交互正常。
+**P0-0：sheets(Univer canvas 网格) 在 pad 上输入交互整体失效**——触摸、
+外接鼠标、CDP 内部合成鼠标全部无法选中/编辑（输入类型无关）；同页面 DOM 内容
+触摸全部正常；同一 HAP 在 2in1(PC) 上真鼠标交互正常。
 
-- 取证：触摸注入的事件链（touchstart→pointerdown→mousedown→click）以补偿后的精确坐标
-  完整抵达网格 canvas（isTrusted=true），Univer 不消费（点击前后截屏对照，选区不动）；
-  CDP 真实鼠标同样无效。焦点链查明：canvas 获焦后 Univer 自己的焦点流程走到
-  内部单元格编辑器（`__editor___INTERNAL_EDITOR__DOCS_NORMAL`）获焦即停，选区状态机
-  不推进，软键盘因该可聚焦 DIV 误弹。
-- 应用侧自救已实测排除：加载前注入 `maxTouchPoints=5` 等触摸能力补丁（生效确认）后
-  复测，选区依旧不动——失效不（只）由能力上报缺失（#1）驱动。
-- 定性：**fork 侧问题铁案（双向对照实验）**——同一台 pad、同一个 Univer 官方 demo
-  页：系统浏览器里触摸选区正常（人工 + 注入双确认）；fork 引擎内（应用文档 view
-  导航到同一 URL，排除 GenOffice 集成层与 Univer 版本变量）点击网格被错处理成
-  「对当前格（A1）的编辑」，选区不跳转。事件层已逐项查清（坐标/detail/buttons/
-  pointerId/时序全部正常），根因候选收敛为**输入设备能力上报缺失**（页面看到
-  `pointer: coarse=false、maxTouchPoints=0、ontouchstart=false` 的幽灵设备，
-  组件按桌面模式初始化状态机，touch 事件到来走错分支）——与回馈 #1 同源，
-  fork 侧补齐能力上报有望一并解决。**应用侧不可修**——已入册
-  `UPSTREAM_FEEDBACK.md` #6。同为 canvas 自绘的 slides（Konva）触摸正常。
+- 取证：各输入方式的事件全链以精确坐标、isTrusted=true 抵达网格 canvas，
+  属性逐项正常（坐标/detail/buttons/pointerId/时序/派生坐标）；Univer 状态机
+  不消费（名称框与选区纹丝不动）。双向对照：同一 Univer 官方 demo 页，系统浏览器
+  （华为浏览器）触摸正常，fork 引擎内失效——排除 GenOffice 集成层与 Univer 版本。
+- 应用侧自救已全部实测排除：能力伪装（matchMedia hook + maxTouchPoints +
+  ontouchstart 全量伪造，生效确认）、CDP 鼠标翻译路线、强制生命周期 active——
+  均无效。rAF/visibility/双击误判/事件重复派发等假设亦逐项排除。
+- 定性：tablet 形态下网格输入消费失效，机制在页面可观察面之外，
+  **应用侧不可修**——已入册 `UPSTREAM_FEEDBACK.md` #6（含完整排除清单）。
+  同为 canvas 自绘的 slides（Konva）触摸正常。
 - 对 D1 的影响：在 P0-0 解决前，sheets 在纯触屏下不可用，其余触屏适配
   （HTML5 DnD、hover 显隐等）对 sheets 无意义、对其他模块可先行——上表 P1-3/P1-4 的
   真机复测在指针假设下结果可信，触摸侧待 P0-0 解决后随验。
