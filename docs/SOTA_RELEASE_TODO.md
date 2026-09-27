@@ -2,7 +2,7 @@
 
 以 **Smart Office** 品牌独立发布（鸿蒙 HAP，可选桌面）前，要清掉上游 genspark 的服务与品牌残留。
 
-> 制定 2026-09-24 | 更新 2026-09-26（产品显示名定稿 Smart Office，bundleName 不变）
+> 制定 2026-09-24 | 更新 2026-09-27（gsk 死依赖删除、AI 品牌标识收尾、Integrations 死测试清理）
 > **决策依据**（为什么选 `glm`、为什么补 `bocha`）见 `SOTA_DECISIONS.md`
 > 路径约定：相对 `thirdparty/genoffice/` 记作 `G/`；本仓壳工程记作 `S/`
 
@@ -15,7 +15,7 @@
 | 1 | **品牌文案批量替换** | §3 | GenOffice 残留实测约 437 处（2026-09-26 口径，已剔除内部标识）；多数与死键清理（§3 删码类）交织 |
 | 2 | 品牌元信息（appId、AI 面板品牌与图标） | §3.1、§3.4 | appId 变更会影响钥匙串/签名链 |
 | 3 | 外链与 Star 推广 | §3.7–3.9 | 6 个上游端点 |
-| 4 | AI 品牌标识（UA、代理探测；Codex 提示词已清） | §2.9、§2.11 | |
+| ~~4~~ ✅ | ~~AI 品牌标识（UA、代理探测、Codex 提示词）~~ | §2.9–2.11 | 已全部完成（2026-09-27） |
 | 5 | 遥测文档与隐私政策同步 | §4.2、§6.3 | 与 §4.1 强绑定 |
 | 6 | 自动更新模块移除 | §4.3–4.4 | 鸿蒙侧整体移除，走应用市场 |
 | 7 | 字体 CDN、GenTeam 社区 | §4.5–4.6 | 换自有或删除 |
@@ -48,7 +48,7 @@
 | --- | --- | --- | --- |
 | 1.1 ✅ | 账号入口（Home 左下角头像 → 设置"账号"页） | 原 `Home.tsx` 的 `AccountEntry` 已换成 `SettingsEntry`（现 `Home.tsx:638-670`、挂载在 `:2224`）；`SettingsModal.tsx` 的 `SECTIONS` 现为 `:142-148` | 已移除 |
 | 1.2 ✅ | 设备码登录全流程 | 原 `genoffice-auth.ts`（device_code→token→session→api_tokens/create）与对应 IPC | 已移除 |
-| 1.3 ⬜ | **`@genspark/cli`(gsk) 依赖链** | `G/packages/ai-search/package.json:19` 仍声明 `@genspark/cli`；`electron-builder.cjs` 的 `extraResources` 仍有三处把它拷成 `gsk/node_modules/@genspark/cli` | **未做**：代码已无调用（`gsk.ts` 已删），但依赖与打包配置还在，属死依赖，安装包仍会带 gsk CLI 树 |
+| ~~1.3~~ ✅ | ~~`@genspark/cli`(gsk) 依赖链~~ | `packages/ai-search/package.json`、`electron-builder.cjs`（extraResources 三处 gsk/ 拷贝）、`gen-third-party-notices.mjs`（许可证条目） | 已删除，lockfile 同步（2026-09-27）；gsk 树只进桌面安装器，HAP 体积不受影响 |
 | 1.4 ✅ | 积分展示与用量外跳 | `gsk.ts` 已删，相关 UI 与 IPC 已移除 | 已移除 |
 | 1.5 ✅ | 云项目（Genspark Projects） | `cloud-projects.ts` 已删，UI 与 IPC 已移除 | 已移除 |
 | 1.6 ✅ | 登录埋点 | 随 1.1/1.2 移除 | 已移除 |
@@ -57,8 +57,8 @@
 
 ## 2. AI 能力与后端 🟡 主体已完成
 
-**已完成**：2.1–2.6、2.8。
-**待做**：2.7（未登录错误文案）、2.9–2.11（品牌标识，三处都还是旧品牌）。
+**已完成**：2.1–2.6、2.8–2.11。
+**待做**：2.7（未登录错误文案）。
 
 | # | 项 | 位置 | 动作 |
 | --- | --- | --- | --- |
@@ -70,9 +70,9 @@
 | 2.6 ✅ | 生图/媒体解析/搜索的 genspark 路由 | `media-tools.ts:29-32,73-78`、`search-tools.ts:20,40`、`index.ts:144-151,186-193` | 按 D3 处理 |
 | 2.7 🟡 | 未登录错误文案（20 语言） | `docs-main.ts:200` 起；各 app `i18n/ai/*.ts` | 改"未配置 AI 后端 + 打开设置"；`errGskCli` 已改名 `errAiProviderUnset`，文案待改 |
 | 2.8 ✅ | gsk 登录态门禁按钮（4 个编辑器 AI 面板） | 各 `AiPanel.tsx` + `ai:gsk-status`/`ai:gsk-login` 通道 | 随 1.2 移除 |
-| **2.9** ⬜ | **AI User-Agent** | `G/packages/ai-provider/src/fetch.ts:25`（`AI_DEFAULT_USER_AGENT = 'GenOffice'`） | 改为 `SotaOffice/<version>` |
+| ~~2.9~~ ✅ | ~~AI User-Agent~~ | `G/packages/ai-provider/src/fetch.ts:25` 现为 `SotaOffice` | 已落地，`fetch.test.ts` 断言同步（2026-09-27 核验） |
 | ~~2.10~~ ✅ | ~~Codex CLI 提示词自称 GenOffice~~ | `G/packages/ai-provider/src/codex-app-server.ts:65,376` | 已换 Smart Office（2026-09-26）；`<genoffice_payload>` 属内部标识不动 |
-| **2.11** ⬜ | **代理探测硬编码 genspark.ai** | `G/apps/shell/src/main/index.ts:4525`、`slides-main.ts:4651-4652` | 换自有域名或删（机制可保留） |
+| ~~2.11~~ ✅ | ~~代理探测硬编码 genspark.ai~~ | `index.ts` / `slides-main.ts` 探测域换 `api.openai.com` | 机制保留：PAC 按主机回答，须探境外 BYOK 代表 host（2026-09-27） |
 
 ## 3. 品牌与文案 ⬜ 待做
 
@@ -103,7 +103,7 @@
 | 3.6 | Logo 与图标资产 | `assets/genoffice-logo.svg`、`app-icon.png`、`build/icons/*` | 换 Sota 资产 |
 | 3.7 | 外链（6 个上游端点） | `github.com/genspark-ai/genoffice`（About/Star/star 计数/更新页）、`genoffice.ai/join`、`genspark.ai/pricing` | 换自有或删除 |
 | 3.8 | Star 推广机制 | `star-prompt.ts`（全文）、`StarPromptCard.tsx`、`SettingsModal.tsx:1188-1206` | 独立发布建议整体移除 |
-| ~~3.9~~ | ~~Integrations 安装命令~~ | — | **作废**：集成页已随账号链整体移除；需清掉残留的测试导入（`apps/shell/tests/settings-integrations.test.ts` 仍引用已不存在的 `IntegrationsPane`） |
+| ~~3.9~~ ✅ | ~~Integrations 安装命令~~ | — | 作废并已清残留：`settings-integrations.test.ts`、`settings-mcp.test.ts` 两个死测试（import 已删组件、文件级失败）已删除（2026-09-27） |
 | 3.10 | CLI/MCP/SKILL 命名 | `skills/genoffice/SKILL.md`、`cli/src/agent-skills.ts:25`、`result.ts:149`、`commands/mcp.ts:8`、`fs.ts:37`、`cli-link.ts`、MCP 示例名 | 换品牌（技能名变更需发布迁移） |
 | ~~3.11~~ ✅ | ~~默认保存目录~~ | `G/apps/shell/src/shared/home-api.ts:191`（实现落在 `packages/electron-utils/src/default-save-dir.ts`） | 已落地 `Documents/Smart Office`（2026-09-26），shim 日志与探测路径已同步；旧 `Sota Office` 目录不迁移，经最近列表绝对路径仍可打开 |
 | 3.12 🟡 | 零散硬编码品牌 | `control-handlers.ts:45`、`NoteMargin.tsx:168,302` 已清；剩 `pdf-skill.ts:5`、`strings-zotero.ts`（20 语言）等——同属 §3 大盘的 GenOffice 残留（约 437 处，见下） | 随 §3 i18n 批量替换一并做 |
@@ -118,7 +118,7 @@
 | 4.4 ⬜ | 更新 UI 入口 | `SettingsModal.tsx:75-77,1170-1187`、`app-menu.ts:564-586` | 随 4.3 |
 | 4.5 ⬜ | GenTeam 社区 + GitHub star 生态 | `index.ts:485,3533-3534`、`Onboarding.tsx:215`、star 计数 `index.ts:521-537` | 移除或换自有 |
 | 4.6 ⬜ | 字体 CDN | `slides/src/main/font-store.ts:16-52` | 换自有 CDN 或内置字体包（sha256 校验可保留） |
-| 4.7 ⬜ | 代理探测域名 | 见 2.11 | 同 |
+| ~~4.7~~ ✅ | ~~代理探测域名~~ | 见 2.11 | 随 2.11 完成（2026-09-27） |
 
 ## 5. 壳工程（HarmonyOS 侧，`S/`）🟡 5.4 已完成
 
@@ -233,5 +233,5 @@ ai-search 20 测试通过（media-tools 测试重写为 BYOK 语义）。
   壳工程应用名等零散硬编码已先行清完（2026-09-26）
 - **shared/ipc 与 preload 的类型残留**：`ai:gsk-status` channel 常量、
   `GenSparkAccountStatus` 类型（现无 main handler，调用会 reject）
-- **AI 品牌标识**：§2.9（UA）、§2.11（代理探测）；§2.10 Codex 提示词已清
+- **AI 品牌标识**：§2.9（UA）、§2.10（Codex 提示词）、§2.11（代理探测）已全部完成（2026-09-27）
 - **UI 面板引导**：未配置 AI 时给"去设置配置模型服务"提示（替代原登录引导）
