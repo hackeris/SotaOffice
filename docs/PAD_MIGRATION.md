@@ -133,12 +133,13 @@ Y 偏移补偿；补偿标定后已全部复测）。修正后的结论：
   复测，选区依旧不动——失效不（只）由能力上报缺失（#1）驱动。
 - 定性：**fork 侧问题铁案（双向对照实验）**——同一台 pad、同一个 Univer 官方 demo
   页：系统浏览器里触摸选区正常（人工 + 注入双确认）；fork 引擎内（应用文档 view
-  导航到同一 URL，排除 GenOffice 集成层与 Univer 版本变量）事件全链以精确坐标抵达
-  iframe 内 Univer 网格，但点击网格被错处理成「对当前格（A1）的编辑」（编辑框出现、
-  软键盘误弹即此因），选区不跳转。病灶：fork 的触摸合成事件被 Univer 判定为
-  「输入意图」而非「选区意图」。**应用侧不可修**——已入册 `UPSTREAM_FEEDBACK.md` #6。
-  同为 canvas 自绘的 slides（Konva，消费 pointer/touch 原生事件）触摸选中/拖拽
-  实测正常，非 canvas 自绘整体失效。
+  导航到同一 URL，排除 GenOffice 集成层与 Univer 版本变量）点击网格被错处理成
+  「对当前格（A1）的编辑」，选区不跳转。事件层已逐项查清（坐标/detail/buttons/
+  pointerId/时序全部正常），根因候选收敛为**输入设备能力上报缺失**（页面看到
+  `pointer: coarse=false、maxTouchPoints=0、ontouchstart=false` 的幽灵设备，
+  组件按桌面模式初始化状态机，touch 事件到来走错分支）——与回馈 #1 同源，
+  fork 侧补齐能力上报有望一并解决。**应用侧不可修**——已入册
+  `UPSTREAM_FEEDBACK.md` #6。同为 canvas 自绘的 slides（Konva）触摸正常。
 - 对 D1 的影响：在 P0-0 解决前，sheets 在纯触屏下不可用，其余触屏适配
   （HTML5 DnD、hover 显隐等）对 sheets 无意义、对其他模块可先行——上表 P1-3/P1-4 的
   真机复测在指针假设下结果可信，触摸侧待 P0-0 解决后随验。

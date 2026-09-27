@@ -118,7 +118,25 @@ CDP 合成鼠标事件在两台设备上均派发成功,但只在 PC 上改变�
 ```
 
 **定性:fork 侧问题铁案(双向对照,排除 GenOffice 集成层与 Univer 版本变量)**。
-同一 demo 页面唯一差异是浏览器引擎;病灶精确为:**fork 的触摸合成事件序列被
-Univer 判定为"输入意图"而非"选区意图"**——点击某格被处理成对当前格的编辑。
-Konva 等只消费坐标的 canvas 库不受影响。疑点方向:合成 mouse 事件的 detail/
-button/事件配对/焦点时序与真鼠标不一致。需 fork 侧排查触摸→mouse 的事件构造。
+同一 demo 页面唯一差异是浏览器引擎;点击某格被处理成对当前格的编辑,选区不跳转。
+Konva 等只消费坐标的 canvas 库不受影响。
+
+**事件层已查清(合成事件本身正常)**:iframe 内探针逐项核对——clientX/Y 精确、
+screenX/Y 换算正确(screenY×dpr=注入物理坐标)、offsetX/Y 与 pageX/Y 自洽、
+click.detail=1、buttons 正确、pointerId/pointerType(touch)正常、
+isTrusted=true、时序为标准的 pointerup→mousedown→mouseup→click。
+(Univer 内部会对容器收到的 pointerdown 向 canvas 重派发一次 isTrusted=false
+的转发,非 fork 重复派发。)
+
+**根因候选(从"合成事件异常"修正为"设备能力上报缺失",与 #1 同源)**:
+触屏平板页面上 `matchMedia` 全错——`(pointer: coarse)=false、
+(any-pointer: coarse)=false、(pointer: fine)=false、(hover: hover)=false、
+maxTouchPoints=0、'ontouchstart' in window=false`——页面看到的是一台
+"无任何输入设备的幽灵机器"。机制假设:Univer 等组件在初始化时探测触屏能力
+选择交互模式,能力全空 → 桌面模式状态机 + touch pointerType 事件 →
+走错分支(tap 被当作输入)。旁证:应用侧曾注入 `maxTouchPoints=5`+
+`ontouchstart` 补丁仍失效——`matchMedia` 由 Blink 内部评估,JS 无法覆盖,
+单点补丁救不了多路径探测。
+**修复价值**:补齐输入设备能力上报(触摸屏设备枚举 + media query 值 +
+maxTouchPoints)有望一并解决 #1(响应式 CSS 全面误判)与本条,以及依赖
+`(hover: none)` 分支的触屏 UI 适配。
