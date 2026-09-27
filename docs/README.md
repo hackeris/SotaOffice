@@ -13,7 +13,7 @@
 | 要改兼容层（shim） | **`SHIM_INTERNALS.md`** |
 | 想查某个坑是不是踩过 | **`PITFALLS.md`** |
 | 想知道还有什么没做完 | **`OPEN_ITEMS.md`** |
-| 要评估能不能上平板 | `PAD_MIGRATION.md` |
+| 要看平板（tablet）支持现状与边界 | `PAD_MIGRATION.md`（不做 pad 专项适配） |
 | 要做发布前的去上游化改造 | `SOTA_RELEASE_TODO.md`（执行清单）+ `SOTA_DECISIONS.md`（为什么这么选）+ `BRAND_REPLACEMENT.md`（品牌替换怎么做） |
 | 要给 Electron fork 提 issue | `UPSTREAM_FEEDBACK.md` |
 | 想知道某段移植决策怎么来的 | `PORT_DESIGN.md` §0～§6 |
@@ -39,7 +39,7 @@
 | **打印** | ★`M2_VERIFY_CHECKLIST.md` §D1、`UPSTREAM_FEEDBACK.md` #5、`MIGRATION_ISSUES.md` L2.3 | 结论一致，落地判据在 M2 |
 | **fork 已知缺陷** | ★`UPSTREAM_FEEDBACK.md`、`ELECTRON_OHOS_CHECKLIST.md` 附 C | |
 | **原生二进制** | ★`MIGRATION_ISSUES.md` L6、`PORT_DESIGN.md` §5 | Rust sidecar 交叉编译配方、wasm 预验 |
-| **平板形态** | ★`PAD_MIGRATION.md`、`PORT_DESIGN.md` D2、`PITFALLS.md`「executableBinaryPaths 声明 = 平板拒装」 | 引擎层无硬阻塞；统一包落地形态与验证状态在主文档 |
+| **平板形态** | ★`PAD_MIGRATION.md`、`PORT_DESIGN.md` D2、`PITFALLS.md`「executableBinaryPaths 声明 = 平板拒装」 | 不做 pad 专项适配；统一包可装可跑，sheets 网格输入在 pad 不可用（fork 缺陷） |
 | **发布改造** | ★`SOTA_RELEASE_TODO.md`（清单）、`SOTA_DECISIONS.md`（决策依据）、`BRAND_REPLACEMENT.md`（品牌替换方案） | |
 | **字体与视觉基线** | ★`MIGRATION_ISSUES.md` L7、`appendix/A` §7 | 尚未启动，无真机数据 |
 

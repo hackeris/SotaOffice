@@ -11,7 +11,7 @@
 | 3 | `dialog.showSaveDialog` 的 `defaultPath` 文件名不回填 | 实测 + 定位 | 中:保存体验 |
 | 4 | `setTitleBarOverlay` 与 WCO(`env(titlebar-area-*)`)缺失 | 实测 | 中:自绘按钮可绕但需避让数据 |
 | 5 | `webContents.print()` 无实现(PrintAdapter TODO) | 源码 | 中:可降级为导出 PDF |
-| 6 | 触摸设备上 canvas 自绘网格(如 Univer)的输入交互失效 | 实测(含事件链探针) | 高:表格类应用在触屏设备不可用 |
+| 6 | 平板上 canvas 自绘网格(如 Univer)的输入消费失效(输入类型无关) | 实测(含双向对照与事件链探针) | 高:表格在平板上不可用(触摸与鼠标均失效) |
 
 ---
 
@@ -70,80 +70,37 @@ maxTouchPoints   : 0
 
 **影响**:文档"打印"功能失效;可用 `printToPDF`(已支持)降级为"导出 PDF"。
 
-## 6. 触摸设备上 canvas 自绘网格的输入交互失效(同包 2in1 正常)
+## 6. 平板(tablet)上 canvas 自绘网格的输入消费失效(输入类型无关;同包 2in1 正常)
 
-**现象**:同一 HAP,sheets(Univer 自绘 canvas 网格)在**触摸设备(平板)**上网格点击/拖拽
-完全失效——选中单元格不动、无法编辑;同页面 **DOM 内容触摸正常**(tab 条、TipTap 编辑器
-tap 聚焦、工具栏按钮 tap 生效、PDF 触摸滚动均正常)。**2in1(PC,无触摸)上同一交互正常**。
-CDP 合成鼠标事件在两台设备上均派发成功,但只在 PC 上改变网格状态。
+**现象**:同一 HAP,sheets(Univer 自绘 canvas 网格)在平板上网格**无法选中/编辑单元格**,
+与输入类型无关——触摸、外接鼠标、CDP 内部合成鼠标(不经触摸桥接层)全部失效;
+各输入方式的事件全链(touchstart→pointerdown→mousedown→click,或 mouse 对应链)
+以精确坐标、isTrusted=true 抵达网格 canvas,事件属性逐项正常(clientX/Y、screenX/Y、
+offsetX/Y、click.detail、buttons、pointerId、合成时序),Univer 状态机不消费。
+同页 DOM 内容输入全部正常(按钮/编辑器聚焦/工具栏/滚动);slides(Konva)触摸选中、
+拖拽正常;**2in1(PC)上一切正常**。
 
-**取证(平板,系统级触摸注入 `uinput -T`,两轮独立复测)**:
-
-```
-事件链探针(document capture):touchstart → pointerdown(pointerType=touch)
-  → mousedown → click 全部抵达网格 canvas,isTrusted=true
-落点校验:WebContentsView 内嵌文档模块的屏幕原点在 tab 条下方(Y 偏移已标定补偿),
-  补偿后 clientX/Y 与目标网格坐标精确一致,elementFromPoint 命中主网格 canvas
-结果:Univer 选区不变(点击前后截屏对照);同操作 CDP dispatchMouseEvent 也派发成功,同样不变
-焦点链(重点):FOCUSIN(ribbon AI 按钮) → FOCUSIN(canvas#univer-sheet-main-canvas,tabindex=1)
-  → FOCUSIN(DIV#__editor___INTERNAL_EDITOR__DOCS_NORMAL)
-  —— 最后一环是 Univer 的内部单元格编辑器容器,即 Univer 自身的焦点流程走到了
-  "内部编辑器获焦",但选区更新/编辑态建立没有继续;系统软键盘因此误弹
-  (该 DIV 可聚焦,系统按文本输入唤起键盘)
-对照:同页 HTML 按钮 tap → click 派发且业务生效;TipTap 正文 tap 聚焦、工具栏加粗 tap 生效
-对照:slides(Konva,同为 canvas 自绘,消费 pointer/touch 原生事件)触摸选中图形、
-  拖拽元素人工实测正常 —— 排除"canvas 自绘整体失效",坏点窄化为
-  "合成 mouse 事件的细节属性/序列与真鼠标不一致,Univer 状态机对此敏感"
-对照:PC(2in1,非触摸)上 CDP 鼠标点击网格 → 选区正常跳转(如 G16)
-其他:navigator.maxTouchPoints=0(平板页面中),与回馈 #1 的能力上报缺失一致
-```
-
-**已排除的应用侧自救(实测证伪)**:在页面加载前注入 `maxTouchPoints=5`、
-`'ontouchstart' in window`、`TouchEvent/Touch/TouchList` 补丁(补偿回馈 #1 的能力
-上报缺失),注入确认生效(`navigator.maxTouchPoints===5`)后复测——点击网格选区
-依旧不动。**Univer 的失效不(只)由能力上报缺失驱动**,应用侧补上报救不回来。
-
-**决定性对照(定性关键,双向)**:同一台平板、同一个 Univer 官方 demo 页
-(office.univer.ai showcase,Univer 住于同源 iframe):
+**双向对照(排除应用层与 Univer 本身)**:同一台平板、同一个 Univer 官方 demo 页
+(office.univer.ai):
 
 ```
-① 系统浏览器(华为浏览器,非 fork 引擎):触摸点击网格 → 选区正常跳转、可进编辑
-   (人工实测 + 系统触摸注入双重确认) —— Univer 触屏支持本身没问题
-② fork 引擎内(经应用文档 view 导航到同一 URL):iframe 内探针显示事件全链
-   (touchstart→pointerdown→mousedown→click)以精确坐标、isTrusted=true 抵达
-   Univer 网格容器;但行为错乱 —— 点击网格中部某格,Univer 却进入"当前默认格(A1)
-   的编辑态"(公式条出现取消/确认按钮与编辑光标),选区不跳转
-③ 应用内 GenOffice sheets 的表现与 ② 同款:软键盘误弹即"编辑态被误触发",
-   焦点链同样走到 Univer 容器/内部 DIV 后即停
+系统浏览器(华为浏览器,非 fork 引擎):触摸选中/编辑正常(人工实测 + 系统触摸注入双确认)
+fork 引擎内(应用文档 view 导航到同一 URL,无任何应用代码):事件全链正常抵达,
+  但点击网格被错处理成"对当前格的编辑",选区不跳转
 ```
 
-**定性:fork 侧问题铁案(双向对照,排除 GenOffice 集成层与 Univer 版本变量)**。
-同一 demo 页面唯一差异是浏览器引擎;点击某格被处理成对当前格的编辑,选区不跳转。
-Konva 等只消费坐标的 canvas 库不受影响。
+**已实测排除(供 fork 侧缩小范围)**:
 
-**事件层已查清(合成事件本身正常)**:iframe 内探针逐项核对——clientX/Y 精确、
-screenX/Y 换算正确(screenY×dpr=注入物理坐标)、offsetX/Y 与 pageX/Y 自洽、
-click.detail=1、buttons 正确、pointerId/pointerType 正常、isTrusted=true、
-时序为标准的 pointerup→mousedown→mouseup→click;CDP 内部通道合成的鼠标事件
-(pointerType=mouse,不经触摸桥接层)同样完整到达网格 canvas,Univer 同样不消费。
-(Univer 内部会对容器收到的 pointerdown 向 canvas 重派发一次 isTrusted=false
-的转发,非 fork 重复派发。)
+- 事件构造:坐标/detail/buttons/pointerId/pointerType/时序/派生坐标全部正常;
+  Univer 对容器 pointerdown 的 canvas 重派发(isTrusted=false)属内部转发,非重复派发
+- 设备能力上报缺失(见 #1):JS 层全量伪造(matchMedia hook、maxTouchPoints、
+  ontouchstart、TouchEvent)并确认生效后仍失效——#1 成立但不是本条门卫
+- rAF 停摆(两端均 60fps)、Page Visibility(两端均有 hidden 波动怪癖,PC 输入正常,
+  与本条不相关)、dpr 坐标换算(canvas backing/client 与 dpr 自洽)
+- 应用侧自救:事件翻译/内部合成均不可行(pad 上 CDP 合成鼠标同样不被消费)
 
-**现象边界(重要)**:用户外接鼠标实测,pad 上表格网格**鼠标同样无法操作**
-——失效与输入类型无关(触摸/外接鼠标/CDP 合成全灭),是 tablet 形态下
-网格输入消费的整体失效。PC(2in1) 真鼠标一切正常。
-
-**已逐项排除的假设(均为实测,供 fork 侧缩小范围)**:
-- 设备能力伪装:JS 层全量伪造(pointer:coarse/hover:none 的 matchMedia hook、
-  maxTouchPoints=5、ontouchstart、TouchEvent)后 Univer 仍失效
-  —— 注:matchMedia 能力上报缺失(#1)仍成立,但不是本条的门卫
-- rAF 停摆:两端均 60fps 正常
-- Page Visibility:两端均出现 visibilityState=hidden 的怪癖(波动),
-  但 PC 输入正常,与失效不相关
-- 双击误判(click.detail 累积)、事件重复派发(isTrusted 区分后排除)
-- dpr 坐标换算:canvas backing/client 比率与 dpr 自洽
-
-**当前定性**:tablet 形态下,事件以正常形态到达页面 canvas 而 Univer 状态机
-不消费,输入类型无关;机制在页面可观察面之外,需 fork 侧对照同页 ArkWeb
-(正常)与 fork(失效)的输入管线内部状态排查。应用侧已无可行自救
-(伪装/翻译/内部合成全试)。
+**定性**:tablet 形态下,事件以正常形态到达页面 canvas 而 Univer 状态机不消费,
+输入类型无关;机制在页面可观察面之外。建议 fork 侧以"同页 ArkWeb 正常 / fork 失效"
+为最小复现,排查 tablet 形态输入管线的内部状态(焦点/激活/可见性在 widget 层的
+传递)。环境:OHOS API 26 / Matrix pad / electron-v37.2.0-openharmony,
+系统触摸注入 uinput -T/-M,页面探针 document capture。
