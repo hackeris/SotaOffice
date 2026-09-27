@@ -638,6 +638,24 @@ if (process.env.GO_TEST_FILES === '1') {
   }
 }
 
+// ---- ⑲ UA 设备标记归一(pad 上 fork 注入的 TABLET → PC,2026-09-27) ----
+// fork 按系统设备类型拼 UA(2in1→PC,tablet→TABLET,见 fork patch 的 GetOhosDeviceType)。
+// Univer 等按 UA 判设备类型的页面,tablet 分支在本引擎不消费网格输入(sheets 点选/编辑
+// 全失效,触摸/外接鼠标/CDP 合成一致);归一为 PC 后全链恢复(真机三阶段翻转 + uinput
+// 触摸复点双向验证)。应用本就是桌面指针假设,报桌面身份语义一致;2in1 的 UA 无
+// TABLET,此替换为无操作。必须在 ready 前、且不能被应用覆盖——本桩先于主 bundle 执行,
+// 已核实应用代码不写 userAgentFallback。
+try {
+  const raw = app.userAgentFallback
+  PROBES.rawUserAgent = raw
+  if (typeof raw === 'string' && raw.includes('TABLET')) {
+    app.userAgentFallback = raw.replace('TABLET;', 'PC;')
+    log('stub: userAgentFallback TABLET→PC')
+  } else {
+    log('stub: userAgentFallback 无 TABLET,跳过')
+  }
+} catch (e) { log(`stub-skip: userAgentFallback(${e?.message})`) }
+
 // ---- ⑫(预案)Tray 兜底 ----
 if (process.env.GO_SHIM_TRAY === '1') {
   try { new Tray(nativeImage.createFromPath(path.join(RESOURCES_DIR, 'app', 'icon.png'))); log('tray: GO_SHIM_TRAY 兜底已建') }

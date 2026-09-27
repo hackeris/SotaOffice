@@ -11,7 +11,7 @@
 | 3 | `dialog.showSaveDialog` 的 `defaultPath` 文件名不回填 | 实测 + 定位 | 中:保存体验 |
 | 4 | `setTitleBarOverlay` 与 WCO(`env(titlebar-area-*)`)缺失 | 实测 | 中:自绘按钮可绕但需避让数据 |
 | 5 | `webContents.print()` 无实现(PrintAdapter TODO) | 源码 | 中:可降级为导出 PDF |
-| 6 | 平板上 canvas 自绘网格(如 Univer)的输入消费失效(输入类型无关) | 实测(含双向对照与事件链探针) | 高:表格在平板上不可用(触摸与鼠标均失效) |
+| 6 | UA 注入设备类型标记(TABLET),按 UA 判设备类型的页面输入不被消费 | 实测 + 源码 | 高:应用侧一行可规避(已落地) |
 
 ---
 
@@ -70,37 +70,42 @@ maxTouchPoints   : 0
 
 **影响**:文档"打印"功能失效;可用 `printToPDF`(已支持)降级为"导出 PDF"。
 
-## 6. 平板(tablet)上 canvas 自绘网格的输入消费失效(输入类型无关;同包 2in1 正常)
+## 6. UA 注入设备类型标记(TABLET),按 UA 判设备类型的页面输入不被消费
 
 **现象**:同一 HAP,sheets(Univer 自绘 canvas 网格)在平板上网格**无法选中/编辑单元格**,
-与输入类型无关——触摸、外接鼠标、CDP 内部合成鼠标(不经触摸桥接层)全部失效;
-各输入方式的事件全链(touchstart→pointerdown→mousedown→click,或 mouse 对应链)
-以精确坐标、isTrusted=true 抵达网格 canvas,事件属性逐项正常(clientX/Y、screenX/Y、
-offsetX/Y、click.detail、buttons、pointerId、合成时序),Univer 状态机不消费。
-同页 DOM 内容输入全部正常(按钮/编辑器聚焦/工具栏/滚动);slides(Konva)触摸选中、
-拖拽正常;**2in1(PC)上一切正常**。
+触摸、外接鼠标、CDP 内部合成鼠标一致失效;2in1(PC)一切正常。事件全链
+(touchstart→pointerdown→mousedown→click)以精确坐标、isTrusted=true 抵达网格 canvas,
+属性逐项正常,页面状态机不消费。同页 DOM 输入全部正常;不做 UA 设备分支的 canvas
+库(如 Konva)触摸正常。
 
-**双向对照(排除应用层与 Univer 本身)**:同一台平板、同一个 Univer 官方 demo 页
-(office.univer.ai):
+**根因(源码 + 翻转实测,双实锤)**:fork 按 `OH_GetDeviceType()` 拼 UA
+(`GetOhosDeviceType()`:2in1→`PC;`,tablet→`TABLET;`,phone→`PHONE;`)。Univer 按 UA
+判设备类型,tablet 分支在本引擎不消费输入。同机同页同输入通道(CDP 合成鼠标),
+唯一变量是 UA 里的设备标记:
 
 ```
-系统浏览器(华为浏览器,非 fork 引擎):触摸选中/编辑正常(人工实测 + 系统触摸注入双确认)
-fork 引擎内(应用文档 view 导航到同一 URL,无任何应用代码):事件全链正常抵达,
-  但点击网格被错处理成"对当前格的编辑",选区不跳转
+UA (OHOS; TABLET; …) → 点网格:选区不跳转(复现)
+UA (OHOS; PC; …)     → 点网格:选区跳转(恢复)
+UA 翻回 TABLET → 不跳转;再翻回 PC → 恢复(可逆)
 ```
 
-**已实测排除(供 fork 侧缩小范围)**:
+真实触摸链同步验证:UA=PC 时,uinput 系统触摸注入(应用前台)的
+touch→pointer→mouse→click 全链正常抵达且被消费,选区正确跳转。
 
-- 事件构造:坐标/detail/buttons/pointerId/pointerType/时序/派生坐标全部正常;
-  Univer 对容器 pointerdown 的 canvas 重派发(isTrusted=false)属内部转发,非重复派发
-- 设备能力上报缺失(见 #1):JS 层全量伪造(matchMedia hook、maxTouchPoints、
-  ontouchstart、TouchEvent)并确认生效后仍失效——#1 成立但不是本条门卫
-- rAF 停摆(两端均 60fps)、Page Visibility(两端均有 hidden 波动怪癖,PC 输入正常,
-  与本条不相关)、dpr 坐标换算(canvas backing/client 与 dpr 自洽)
-- 应用侧自救:事件翻译/内部合成均不可行(pad 上 CDP 合成鼠标同样不被消费)
+**旁证(与相邻缺陷的关系)**:
 
-**定性**:tablet 形态下,事件以正常形态到达页面 canvas 而 Univer 状态机不消费,
-输入类型无关;机制在页面可观察面之外。建议 fork 侧以"同页 ArkWeb 正常 / fork 失效"
-为最小复现,排查 tablet 形态输入管线的内部状态(焦点/激活/可见性在 widget 层的
-传递)。环境:OHOS API 26 / Matrix pad / electron-v37.2.0-openharmony,
-系统触摸注入 uinput -T/-M,页面探针 document capture。
+- 与输入管线无关——CDP 内部合成鼠标(不经触摸桥接层)同样随 UA 翻转失效/恢复;
+  UA 在页面加载时即定型,故输入类型无关
+- 与 #1(设备能力上报缺失)相互独立——JS 层全量伪造能力(matchMedia/maxTouchPoints/
+  TouchEvent,不伪造 UA)不恢复;仅翻转 UA 即恢复
+
+**应用侧规避(已落地)**:Electron 标准 API 一行——`app.userAgentFallback` 把
+`TABLET;` 替换为 `PC;`(仅在 UA 含该标记时,2in1 无感)。桌面指针假设的应用报
+桌面身份,语义一致,无副作用。
+
+**建议 fork 侧**:审视 UA 拼接的设备类型注入策略。页面生态(ua-parser 类)把
+TABLET 当作「触摸优先交互」分支的开关,而本引擎实际给页面的是合成鼠标事件 +
+无触摸能力上报(见 #1),tablet 分支在此环境必然半残。要么 tablet 不注入设备
+标记,要么提供应用可控的开关,并把该行为写进移植文档。环境:OHOS API 26 /
+Matrix pad / electron-v37.2.0-openharmony,系统触摸注入 uinput -T,
+页面探针 document capture。
