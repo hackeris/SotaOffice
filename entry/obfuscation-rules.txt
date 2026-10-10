@@ -1,0 +1,4 @@
+# ArkTS 混淆规则 —— entry/build-profile.json5 的 obfuscation.ruleOptions.files 引用。
+# 仅满足 hvigor 对文件存在性的校验(缺失时 release 构建 CompileArkTS 报 00304036);
+# 混淆开关 enable:false + 本文件无 -enable-* 规则,实际不启用混淆
+# (entry 是 Electron 壳,arkts 侧无可混淆逻辑,开启反而有 native 入口名风险)。
