@@ -188,13 +188,20 @@ export class WebAbility extends WebBaseAbility {
             .catch((err: BusinessError) => {
               LogUtil.error(TAG, 'Failed to set the window layout to full-screen mode. Cause:' + JSON.stringify(err));
             });
-          let promise = data.setSpecificSystemBarEnabled('status', false);
-          promise.then(() => {
-            LogUtil.info(TAG, 'Succeeded in setting the system bar to be invisible.');
-          }).catch((err: BusinessError) => {
-            LogUtil.error(TAG,
-              `Failed to set the system bar to be invisible. Cause code: ${err.code}, message: ${err.message}`);
-          });
+          // PC 模式(sceneboard 字段)是桌面形态,不隐藏状态栏;外层已限定 tablet 前提。
+          // PC 模式下 onPadWindowStageCreate 被跳过,无后续把状态栏设回显示的调用,
+          // 这里若隐藏将整个会话残留生效
+          let isPCStatus = settings.getValueSync(this.context, 'settings.sceneboard.ispcmode', 'false',
+            settings.domainName.USER_PROPERTY);
+          if (isPCStatus !== 'true') {
+            let promise = data.setSpecificSystemBarEnabled('status', false);
+            promise.then(() => {
+              LogUtil.info(TAG, 'Succeeded in setting the system bar to be invisible.');
+            }).catch((err: BusinessError) => {
+              LogUtil.error(TAG,
+                `Failed to set the system bar to be invisible. Cause code: ${err.code}, message: ${err.message}`);
+            });
+          }
           let sysBarProps: window.SystemBarProperties = {
             statusBarColor: '#0000FF00',
             navigationBarColor: '#0000FF00',

@@ -9,6 +9,7 @@ import { Configuration } from '@ohos.app.ability.Configuration';
 import abilityAccessCtrl, { Permissions } from '@ohos.abilityAccessCtrl';
 import bundleManager from '@ohos.bundle.bundleManager';
 import deviceInfo from '@ohos.deviceInfo';
+import { settings } from '@kit.BasicServicesKit';
 import { BusinessError } from '@ohos.base';
 import fs from '@ohos.file.fs';
 import fileUri from '@ohos.file.fileuri';
@@ -148,8 +149,24 @@ export default class EntryAbility extends WebAbility {
     }
   }
 
-  // 沉浸式(平板):隐藏状态栏/通知栏,应用内容全屏。仅 tablet 生效——2in1 无系统
-  // 状态栏概念,保持桌面形态。与 enableSystemDecor 同款重试:Chromium 创建平台窗口
+  // PC 模式判定:tablet 的桌面形态(sceneboard 字段)。非 tablet 或读取失败均按
+  // 非 PC 处理,维持各调用点的既有行为
+  private isPcModeOnTablet(): boolean {
+    if (deviceInfo.deviceType !== 'tablet') {
+      return false;
+    }
+    try {
+      return settings.getValueSync(this.context, 'settings.sceneboard.ispcmode', 'false',
+        settings.domainName.USER_PROPERTY) === 'true';
+    } catch (e) {
+      console.warn(`[immersive] pc mode check failed: ${JSON.stringify(e)}`);
+      return false;
+    }
+  }
+
+  // 沉浸式(平板形态):隐藏状态栏/通知栏,应用内容全屏。仅平板形态会调到本方法
+  // (调用分支已用 isPcModeOnTablet 拦掉 2in1 与 PC 模式)——桌面形态有系统 UI
+  // 概念的都不走全屏沉浸。与 enableSystemDecor 同款重试:Chromium 创建平台窗口
   // 时可能重置窗口状态,无事件锚点,幂等多次覆盖。
   private applyImmersiveForTablet(windowStage: window.WindowStage): void {
     if (deviceInfo.deviceType !== 'tablet') {
@@ -282,9 +299,9 @@ export default class EntryAbility extends WebAbility {
       // 首启本就无此文件
     }
     this.pollUiReadyAndRequestStorage(0);
-    if (deviceInfo.deviceType === 'tablet') {
-      // 平板:无系统三键,decor 与按钮矩形上报均不适用——矩形误报全宽会让
-      // shim 桩⑮注入全宽右上避让,把 tab 条挤压成 0;残留矩形文件一并清除
+    if (deviceInfo.deviceType === 'tablet' && !this.isPcModeOnTablet()) {
+      // 平板形态(非 PC 模式):无系统三键,decor 与按钮矩形上报均不适用——矩形误报
+      // 全宽会让 shim 桩⑮注入全宽右上避让,把 tab 条挤压成 0;残留矩形文件一并清除
       try {
         fs.unlinkSync(EntryAbility.BUTTON_RECT_FILE);
       } catch (e) {
@@ -292,6 +309,9 @@ export default class EntryAbility extends WebAbility {
       }
       this.applyImmersiveForTablet(windowStage);
     } else {
+      // 2in1 与平板的 PC 模式同为桌面形态,须补设 decor(Chromium 平台窗口会吃掉
+      // loadContent 时的装饰声明,tablet PC 模式 2026-10-11 实测无标题栏即此因);
+      // 三按钮真实存在,按钮矩形上报照常
       this.enableSystemDecor(windowStage);
       try {
         this.updateTitleButtonRect(windowStage.getMainWindowSync());
