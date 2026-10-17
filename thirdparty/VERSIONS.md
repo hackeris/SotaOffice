@@ -6,7 +6,7 @@
 
 | 目录 | 依赖 | 当前 commit | 锚点 | remote(fork) |
 | --- | --- | --- | --- | --- |
-| `genoffice/` | 应用本体 | `a1acf05` | 工作分支 `ohos/sota-debrand`（**尚无 tag**） | `github.com/hackeris/genoffice` |
+| `genoffice/` | 应用本体 | `6482d2b8` | 工作分支 `ohos/sota-debrand`，基线锚点 tag **`ohos-v1.0.1`** | `github.com/hackeris/genoffice` |
 | `electron/` | Electron 本体（HarmonyOS fork） | `3af8ccb` | tag **`ohos-v37.2.0`** | `gitcode.com/openharmony-sig/electron`（官方仓） |
 
 ## 应用仓库的两个锚点
@@ -16,7 +16,8 @@
 | commit | 所在分支 | tag | 内容 |
 | --- | --- | --- | --- |
 | `339470d` | `ohos/electron37` | **`ohos-v1.0.0`** | 上游 `316ded6` + electron 37.2.0 pin（9 文件，与 `scripts/patches/genoffice-e37-pin.patch` 同源） |
-| `a1acf05` | `ohos/sota-debrand` | 无 | 在上一行基础上做去上游化改造（账号链移除、默认厂商切换等） |
+| `be0834fd` | `ohos/sota-debrand` | **`ohos-v1.0.1`** | 上游 `4dc4b7b3`（v0.11.829 快照）+ electron 37.2.0 pin（9 文件，同上） |
+| `6482d2b8` | `ohos/sota-debrand` | 无 | 在 `ohos-v1.0.1` 之上重放 26 个去上游化/品牌替换/鸿蒙适配补丁，再加 3 个对账修复提交 |
 
 electron 那边只有一个锚点：tag `ohos-v37.2.0` = 官方 fork 分支
 `electron-v37.2.0-openharmony` 的 HEAD（Chromium 138 + Node 22）。
@@ -39,9 +40,13 @@ git -C thirdparty/genoffice describe --tags --exact-match     # 当前会失败,
 git push origin <分支> && git push origin <tag>
 ```
 
-**应用仓库的校验命令当前会报 `no tag exactly matches`**——因为 submodule 已经推进到
-`ohos/sota-debrand` 的 `a1acf05`，而这个位置还没有打 tag。这是预期状态，不是损坏；
-等这轮改造收尾、在 fork 上打好新 tag 之后，再把它作为锚点更新到上表。
+**应用仓库的校验命令当前会报 `no tag exactly matches`**——submodule 钉在
+`ohos/sota-debrand` 的 `6482d2b8`（tag `ohos-v1.0.1` 之后的补丁 tip），补丁没有
+单独打 tag。这是预期状态，不是损坏；基线锚点用 `ohos-v1.0.1` 校验：
+
+```sh
+git -C thirdparty/genoffice merge-base --is-ancestor ohos-v1.0.1 HEAD && echo ok
+```
 
 ## 说明
 
