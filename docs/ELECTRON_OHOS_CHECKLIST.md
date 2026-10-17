@@ -103,7 +103,8 @@
 | **system_grant** | `INTERNET` / `GET_NETWORK_INFO` / `RUNNING_LOCK` / `PREPARE_APP_TERMINATE` / `FILE_ACCESS_PERSIST` / `GET_FILE_ICON` / `PRINT` | 网络 / 后台长转换防休眠 / 退出前清理(杀 sidecar) / Uri 持久化 / Home 图标 / 打印 |
 | **ACL(user_grant)** | `READ_PASTEBOARD` + `READ_WRITE_{DOCUMENTS,DOWNLOAD,DESKTOP}_DIRECTORY` | 剪贴板读取 + 三目录直读 |
 
-> **user_grant 的关键**:声明 + profile 覆盖只给"申请资格",还须在窗口就绪后走 `requestPermissionsFromUser`。
+> **user_grant 的关键**:声明 + profile 覆盖只给"申请资格",还须运行时走 `requestPermissionsFromUser`
+> (三目录在窗口就绪后;READ_PASTEBOARD 场景触发,时机详见 `PERMISSIONS_ACL.md`)。
 > 只声明不申请时,写用户目录会 EPERM;**没授权时渲染进程根本不会创建,应用走 `window-all-closed` 退出**
 > (退出码 0、无异常,看着像崩溃)。`build-ohos.sh` 会校验必需声明齐全并拦截未获批权限出现。
 

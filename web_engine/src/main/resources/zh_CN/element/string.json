@@ -34,7 +34,7 @@
     },
     {
       "name": "access_pasteboard",
-      "value": "是否允许读取剪贴板"
+      "value": "用于在文档中粘贴您复制的内容"
     },
     {
       "name": "location",

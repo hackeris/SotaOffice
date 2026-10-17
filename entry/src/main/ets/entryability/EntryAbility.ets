@@ -9,12 +9,17 @@ import { Configuration } from '@ohos.app.ability.Configuration';
 import abilityAccessCtrl, { Permissions } from '@ohos.abilityAccessCtrl';
 import bundleManager from '@ohos.bundle.bundleManager';
 import deviceInfo from '@ohos.deviceInfo';
-import { settings } from '@kit.BasicServicesKit';
+import { pasteboard, settings } from '@kit.BasicServicesKit';
 import { BusinessError } from '@ohos.base';
 import fs from '@ohos.file.fs';
 import fileUri from '@ohos.file.fileuri';
 
 import { WebAbility } from 'web_engine';
+
+// clip-perm.json 的内容结构(shim 只认 granted 字段)
+interface ClipPermSignal {
+  granted?: boolean;
+}
 
 export default class EntryAbility extends WebAbility {
   onConfigurationUpdate(config: Configuration) {
@@ -87,13 +92,16 @@ export default class EntryAbility extends WebAbility {
   }
 
   // READ_PASTEBOARD 是 user_grant:签名 ACL 只给申请资格,授予须用户点头。
-  // 启动即申请(已授予静默跳过);必须在窗口就绪后——onCreate 期无处挂授权框,
-  // 系统静默拒绝且记账,后续真窗口期申请会被限频。
-  private clipboardPermRequested: boolean = false;
-
-  // 授权信号文件(shim 侧 main-shim.mjs 读同路径):未授权时 shim 绝不调用原生
-  // 剪贴板读侧——调用即触发系统"无法访问系统剪贴板"弹窗(2026-09-22 实测)
+  // 申请时机=场景触发(应用市场审核要求:未见对应功能不得提前申请;官方指引
+  // 亦要求弹框前用无权限检查规避无效弹框):应用(经 shim)真正调用剪贴板读侧
+  // 时,shim 落 CLIP_REQUEST 触发文件,本侧 watch 到后——已授权静默确认;未授权
+  // 先 hasData/getChangeCount 判断(剪贴板无数据或内容未变化时,空读本就是正确
+  // 结果,不弹框),确有新内容才 requestPermissionsFromUser。弹框期窗口必然就绪
+  // (有 renderer 在跑才有剪贴板调用),不触 onCreate 期申请被系统静默拒绝的坑。
   private static readonly CLIP_SIGNAL = '/data/storage/el2/base/files/clip-perm.json';
+  // 触发文件(shim 侧 main-shim.mjs 桩⑭写,内容仅作信号):未授权时 shim 绝不
+  // 调用原生剪贴板读侧——调用即触发系统"无法访问系统剪贴板"弹窗(2026-09-22 实测)
+  private static readonly CLIP_REQUEST = '/data/storage/el2/base/files/clip-request.json';
 
   private writeClipSignal(granted: boolean): void {
     try {
@@ -106,47 +114,111 @@ export default class EntryAbility extends WebAbility {
     }
   }
 
-  private requestClipboardPermission(): void {
-    if (this.clipboardPermRequested) {
+  private async isClipPermGranted(): Promise<boolean> {
+    try {
+      const info = await bundleManager.getBundleInfoForSelf(
+        bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION);
+      const tokenId = info.appInfo?.accessTokenId;
+      if (!tokenId) {
+        return false;
+      }
+      const st = await abilityAccessCtrl.createAtManager()
+        .checkAccessToken(tokenId, 'ohos.permission.READ_PASTEBOARD');
+      return st === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED;
+    } catch (e) {
+      // 权限未声明/未获批时 checkAccessToken 抛错 → 按未授权处理
+      return false;
+    }
+  }
+
+  // 冷启动重置授权信号(无弹框):已授予 → 写 granted,shim 直接恢复读侧;
+  // 未授予 → 删掉上一会话的拒绝记录,本会话用户仍有被询问的机会
+  private resetClipboardGrantState(): void {
+    this.isClipPermGranted().then((granted: boolean) => {
+      if (granted) {
+        this.writeClipSignal(true);
+        return;
+      }
+      try {
+        fs.unlinkSync(EntryAbility.CLIP_SIGNAL);
+      } catch (e) {
+        // 本就没有
+      }
+    });
+  }
+
+  // 会话内已申请过的剪贴板版本(官方 getChangeCount 规避:内容未变化不重复弹框)
+  private lastClipChangeCount: number = -1;
+  private clipPermDialogActive: boolean = false;
+
+  private async handleClipGrantRequest(): Promise<void> {
+    // 先删触发文件:弹框挂起期间 shim 再写会再触发,本方法幂等可重入
+    try {
+      fs.unlinkSync(EntryAbility.CLIP_REQUEST);
+    } catch (e) {
+      // shim 已删/竞态,无碍
+    }
+    if (this.clipPermDialogActive) {
       return;
     }
-    this.clipboardPermRequested = true;
     try {
-      const atm = abilityAccessCtrl.createAtManager();
-      bundleManager.getBundleInfoForSelf(bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION)
-        .then((info: bundleManager.BundleInfo) => {
-          const tokenId = info.appInfo?.accessTokenId;
-          if (!tokenId) {
-            return undefined;
-          }
-          return atm.checkAccessToken(tokenId, 'ohos.permission.READ_PASTEBOARD');
-        })
-        .then((st: abilityAccessCtrl.GrantStatus | undefined) => {
-          if (st !== undefined && st === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED) {
-            this.writeClipSignal(true);
-            return;
-          }
-          const perms: Array<Permissions> = ['ohos.permission.READ_PASTEBOARD'];
-          atm.requestPermissionsFromUser(this.context, perms)
-            .then((res) => {
-              // authResults[0]===0 为用户已允许
-              const granted = res.authResults.length > 0 && res.authResults[0] === 0;
-              this.writeClipSignal(granted);
-            })
-            .catch((e: BusinessError) => {
-              this.writeClipSignal(false);
-              console.warn(`clipboard perm request: ${JSON.stringify(e)}`);
-            });
-        })
-        .catch((e: BusinessError) => {
-          // 权限未声明/未获批时 checkAccessToken 抛错 → 明确告知 shim 保持静默
-          this.writeClipSignal(false);
-          console.warn(`clipboard perm check: ${JSON.stringify(e)}`);
-        });
+      const perm: ClipPermSignal =
+        JSON.parse(fs.readTextSync(EntryAbility.CLIP_SIGNAL)) as ClipPermSignal;
+      if (perm?.granted === true || perm?.granted === false) {
+        // true:shim 已恢复;false:用户本会话已拒绝,静默
+        return;
+      }
     } catch (e) {
-      this.writeClipSignal(false);
-      console.warn(`clipboard perm precheck: ${JSON.stringify(e)}`);
+      // 无结论,继续
     }
+    if (await this.isClipPermGranted()) {
+      this.writeClipSignal(true);
+      return;
+    }
+    // 官方"剪贴板弹窗适配优化":无数据/内容未变化不访问、不弹框
+    const sysPaste = pasteboard.getSystemPasteboard();
+    let hasData = false;
+    try {
+      hasData = await sysPaste.hasData();
+    } catch (e) {
+      return;
+    }
+    if (!hasData) {
+      return;
+    }
+    const changeCount = sysPaste.getChangeCount();
+    if (changeCount === this.lastClipChangeCount) {
+      return;
+    }
+    this.clipPermDialogActive = true;
+    try {
+      const perms: Array<Permissions> = ['ohos.permission.READ_PASTEBOARD'];
+      const res = await abilityAccessCtrl.createAtManager()
+        .requestPermissionsFromUser(this.context, perms);
+      // authResults[0]===0 为用户已允许
+      const granted = res.authResults.length > 0 && res.authResults[0] === 0;
+      this.lastClipChangeCount = changeCount;
+      this.writeClipSignal(granted);
+    } catch (e) {
+      console.warn(`clipboard perm request: ${JSON.stringify(e)}`);
+    } finally {
+      this.clipPermDialogActive = false;
+    }
+  }
+
+  // 常驻监视(1s 一查,单次 stat;应用退出随进程消亡)。shim 写触发文件 → 走申请
+  private watchClipGrantRequest(): void {
+    let requested = false;
+    try {
+      fs.accessSync(EntryAbility.CLIP_REQUEST);
+      requested = true;
+    } catch (e) {
+      requested = false;
+    }
+    if (requested) {
+      this.handleClipGrantRequest();
+    }
+    setTimeout((): void => this.watchClipGrantRequest(), 1000);
   }
 
   // PC 模式判定:tablet 的桌面形态(sceneboard 字段)。非 tablet 或读取失败均按
@@ -292,7 +364,10 @@ export default class EntryAbility extends WebAbility {
 
   onWindowStageCreate(windowStage: window.WindowStage) {
     super.onWindowStageCreate(windowStage);
-    this.requestClipboardPermission();
+    // 剪贴板授权不在此申请(启动即弹框被应用市场审核驳回):重置信号 + 起常驻
+    // 监视,申请时机由 shim 的剪贴板读侧调用触发(场景触发,详见各方法注释)
+    this.resetClipboardGrantState();
+    this.watchClipGrantRequest();
     try {
       fs.unlinkSync(EntryAbility.UI_READY_FILE);
     } catch (e) {

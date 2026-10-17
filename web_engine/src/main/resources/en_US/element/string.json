@@ -22,7 +22,7 @@
     },
     {
       "name": "access_pasteboard",
-      "value": "Pasteboard requires user_grant permission"
+      "value": "Used to paste copied content into documents"
     },
     {
       "name": "location",

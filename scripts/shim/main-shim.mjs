@@ -211,18 +211,24 @@ try {
   log('stub: hidden-view parking installed(1s scan)')
 } catch (e) { log(`hidden-view parking 安装失败:${e?.message}`) }
 
-// ---- ⑭ 剪贴板读侧静默(授权信号文件恢复制,2026-09-22 v2)----
+// ---- ⑭ 剪贴板读侧静默(场景触发授权,2026-10-11 v3)----
 // 背景:未授权时读侧任一原生调用触发系统"无法访问系统剪贴板"弹窗(slides 在
 // mount+focus 时 probe → 弹窗关闭 → focus 回归 → 再 probe = 死循环,2026-09-21 修复)。
 // 教训(2026-09-22):曾改"自证式探测"(写标记+原生 readText 读回),但**未授权时调用
-// 原生 readText 本身就会弹系统窗**——回归时 sheets 打开即弹。故 v2:**未获授权信号
-// 绝不调用原生读侧**。
-// 授权信号由 entry EntryAbility(ArkTS,能 checkAccessToken/requestPermissions)写
-// clip-perm.json;shim 轮询该文件:granted=true → 恢复原读侧;false/超时 → 永久静默。
-// 写侧始终不受影响。
+// 原生 readText 本身就会弹系统窗**——回归时 sheets 打开即弹。故铁律:**未获授权
+// 信号绝不调用原生读侧**。写侧始终不受影响。
+// v1/v2 为启动即授权(EntryAbility 窗口一就绪就 requestPermissionsFromUser),被
+// 应用市场审核驳回:首次打开未见对应功能,不得提前申请权限。v3 改场景触发:应用
+// 每次调读侧且未授权时,写 clip-request.json 触发 entry 侧申请(entry 按官方指引
+// 先 hasData/getChangeCount 规避无效弹框,确有新内容才弹);结果写 clip-perm.json。
+// 读侧桩在每次调用入口同步查 clip-perm.json:granted=true → 立即恢复原实现并返回
+// 真值(不等轮询周期);granted=false(用户拒绝)→ 本会话永久静默,不再触发申请。
+// 冷启动由 entry resetClipboardGrantState 重置上一会话的拒绝记录。
 try {
   const { clipboard, nativeImage } = await import('electron')
   if (clipboard) {
+    const GRANT_FILE = '/data/storage/el2/base/files/clip-perm.json'
+    const REQUEST_FILE = '/data/storage/el2/base/files/clip-request.json'
     const emptyReturn = {
       availableFormats: () => [],
       readText: () => '',
@@ -236,33 +242,42 @@ try {
     for (const [m, fn] of Object.entries(emptyReturn)) {
       if (typeof clipboard[m] === 'function') {
         orig[m] = clipboard[m]
-        try { clipboard[m] = fn } catch {}
       }
     }
-    log('stub: clipboard 读侧静默(等待授权信号文件)')
-    // 信号文件由 EntryAbility 写(路径须与 ArkTS 侧一致);轮询 3s × 20 次(60s)。
-    // 读到 granted=false 立即停(用户已拒/未声明);超时也停(保持静默,有界)。
-    const GRANT_FILE = '/data/storage/el2/base/files/clip-perm.json'
-    let tries = 0
-    const checkGrant = () => {
-      tries++
-      let verdict = null
-      try { verdict = JSON.parse(fs.readFileSync(GRANT_FILE, 'utf8')) } catch {}
-      if (verdict?.granted === true) {
-        for (const [m, fn] of Object.entries(orig)) { try { clipboard[m] = fn } catch {} }
-        PROBES.clipGrant = 'granted'
-        log('stub: clipboard 读侧已恢复(授权信号确认)')
-        return
-      }
-      if (verdict?.granted === false) {
-        PROBES.clipGrant = 'denied'
-        log('stub: clipboard 授权信号=未授予,读侧永久静默')
-        return
-      }
-      if (tries < 20) setTimeout(checkGrant, 3000)
-      else { PROBES.clipGrant = 'timeout'; log('stub: clipboard 授权信号超时未到,读侧保持静默') }
+    let restored = false
+    let denied = false
+    let lastAsk = 0
+    for (const [m, emptyFn] of Object.entries(emptyReturn)) {
+      if (typeof orig[m] !== 'function') continue
+      try {
+        clipboard[m] = (...args) => {
+          if (!restored) {
+            let verdict = null
+            try { verdict = JSON.parse(fs.readFileSync(GRANT_FILE, 'utf8')) } catch {}
+            if (verdict?.granted === true) {
+              restored = true
+              PROBES.clipGrant = 'granted'
+              log('stub: clipboard 读侧已恢复(授权信号确认)')
+            } else if (verdict?.granted === false) {
+              denied = true
+              PROBES.clipGrant = 'denied'
+              log('stub: clipboard 用户已拒绝,读侧本会话静默')
+            }
+          }
+          if (restored) {
+            try { return orig[m](...args) } catch (e) { log(`clipboard ${m} 恢复后调用失败:${e?.message}`) }
+            return emptyFn(...args)
+          }
+          // 未授权:触发 entry 申请(2s 节流,probe 随 focus 高频)并返回空
+          if (!denied && Date.now() - lastAsk > 2000) {
+            lastAsk = Date.now()
+            try { fs.writeFileSync(REQUEST_FILE, JSON.stringify({ seq: lastAsk })) } catch {}
+          }
+          return emptyFn(...args)
+        }
+      } catch {}
     }
-    app.whenReady().then(() => setTimeout(checkGrant, 3000))
+    log('stub: clipboard 读侧场景触发授权(启动静默,桩 v3)')
   }
 } catch (e) { log(`clipboard 桩安装失败:${e?.message}`) }
 

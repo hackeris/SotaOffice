@@ -39,8 +39,13 @@
 实际情况（2026-09-24 真机实测）：只声明、且签名 profile 也覆盖了，但没有运行时申请的话，
 往用户目录写会**全部报 EPERM**。**ACL 给的只是"申请资格"，不是"已授予"。**
 
-所以这四条（READ_PASTEBOARD + 三目录）声明之后，还要在窗口就绪后走
-`requestPermissionsFromUser` 弹窗申请。装机后跑 `grant-acl.sh` 就是在做这件事。
+所以这四条（READ_PASTEBOARD + 三目录）声明之后，还必须运行时走 `requestPermissionsFromUser`
+弹窗申请，时机有区别：
+
+- **三目录**：窗口就绪后申请（装机后跑 `grant-acl.sh` 就是在做这件事）。
+- **READ_PASTEBOARD**：场景触发申请——应用真正执行剪贴板读取时才弹（shim 落触发文件
+  → entry `watchClipGrantRequest` 处理，先 `hasData`/`getChangeCount` 规避无效弹框）。
+  启动即申请会被应用市场审核驳回，不要改回去。
 
 没申请的后果很严重：渲染进程根本不会创建，应用静默退出，看着像崩溃。
 详见 `DEVICE_OPERATIONS.md` 的授权一节。
@@ -90,7 +95,7 @@
 | 权限 | 类型 | 用途 |
 | --- | --- | --- |
 | `kernel.ALLOW_WRITABLE_CODE_MEMORY` | ACL | V8 JIT 与 wasm，引擎级必需（这条是续期） |
-| `READ_PASTEBOARD` | user_grant | 剪贴板读取 |
+| `READ_PASTEBOARD` | user_grant | 剪贴板读取（场景触发申请，见上） |
 | 文档／下载／桌面三条目录 | user_grant | 用户目录直读直写 |
 
 2026-09-24 调试 profile 到位，五件齐，signed HAP 装机成功。
