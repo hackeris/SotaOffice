@@ -95,7 +95,7 @@
 
 | 依赖 | remote(fork) | 锚点 | 说明 |
 |---|---|---|---|
-| GenOffice 本体 | `github.com/hackeris/genoffice` | 分支 `ohos/sota-debrand` @ `14a54c1e`，基线锚点 tag `ohos-v1.0.1` @ `be0834fd` | 上游无推送权，故自建 fork。`ohos-v1.0.1` = 上游 v0.11.829 快照（`4dc4b7b3`）+ 9 文件 electron pin；tip = 锚点 + 26 个去上游化补丁 + 对账/pin 适配修复 |
+| GenOffice 本体 | `github.com/hackeris/genoffice` | 分支 `ohos/sota-debrand-v0.11.829` @ `14a54c1e`，基线锚点 tag `ohos-v1.0.1` @ `be0834fd` | 上游无推送权，故自建 fork。`ohos-v1.0.1` = 上游 v0.11.829 快照（`4dc4b7b3`）+ 9 文件 electron pin；tip = 锚点 + 26 个去上游化补丁 + 对账/pin 适配修复。旧线（316ded6 基线）保留在 `ohos/sota-debrand` |
 | electron 本体 | `github.com/hackeris/electron` | tag **`ohos-v37.2.0`** @ `3af8ccb` | **引擎件正式来源**；tag = 官方 fork 分支 `electron-v37.2.0-openharmony` HEAD。产物 = fork 构建输出 `src/out/musl_64`，经 `sync-engine.sh` 组装进 `web_engine/` |
 
 **产物来源规范**：任何构建产物，要么是本项目主体代码，要么作为三方依赖在 `thirdparty/` 维护。

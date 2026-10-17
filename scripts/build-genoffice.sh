@@ -39,12 +39,13 @@ MODULES="docs sheets slides pdf markdown html"
 echo "==> [1/4] 源校验(mode=$MODE src=$SRC)"
 if [ "$MODE" = "genoffice" ]; then
   BR=$(git -C "$SRC" branch --show-current 2>/dev/null || echo none)
-  # 允许的分支:ohos/electron37(上游基线)与 ohos/sota-debrand(产品化改造分支)。
+  # 允许的分支:ohos/electron37(上游基线)、ohos/sota-debrand(316ded6 基线产品化改造)
+  # 与 ohos/sota-debrand-v0.11.829(上游 v0.11.829 基线重放)。
   # 守卫的意义是挡住"在别的分支上误构建":branch 名是唯一可靠的判据(改分支名会
   # 同时改这里);新增工作分支时一并加进来,不要放宽成前缀匹配。
   case "$BR" in
-    ohos/electron37|ohos/sota-debrand) ;;
-    *) echo "FATAL: $SRC 不在允许分支(当前:$BR;允许 ohos/electron37 / ohos/sota-debrand)" >&2; exit 1 ;;
+    ohos/electron37|ohos/sota-debrand|ohos/sota-debrand-v0.11.829) ;;
+    *) echo "FATAL: $SRC 不在允许分支(当前:$BR;允许 ohos/electron37 / ohos/sota-debrand / ohos/sota-debrand-v0.11.829)" >&2; exit 1 ;;
   esac
   grep -q '"electron": "37.2.0"' "$SRC/package.json" || { echo "FATAL: 根 package.json 未 pin electron 37.2.0" >&2; exit 1; }
   if [ "$DO_BUILD" = "1" ]; then
