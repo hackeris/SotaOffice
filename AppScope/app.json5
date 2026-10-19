@@ -3,8 +3,8 @@
     // 正式包名(ACL 五件以此名义在 AGC 申请;其调试 profile 到位前,构建产 unsigned HAP)
     "bundleName": "app.fuqidian.sotaoffice",
     "vendor": "Fuqidian",
-    "versionCode": 1000002,
-    "versionName": "1.0.2",
+    "versionCode": 1000003,
+    "versionName": "1.0.3",
     "icon": "$media:layered_image",
     "label": "$string:app_name"
     // multiAppMode 移除:API 26 真机 specified 启动被拒(hilog [ability_util.h340]
