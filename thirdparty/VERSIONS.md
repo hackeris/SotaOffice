@@ -20,8 +20,9 @@
 | `be0834fd` | `ohos/sota-debrand-v0.11.829` | **`ohos-v1.0.1`** | 上游 `4dc4b7b3`（v0.11.829 快照）+ electron 37.2.0 pin（9 文件，同上） |
 | `14a54c1e` | `ohos/sota-debrand-v0.11.829` | 无 | 在 `ohos-v1.0.1` 之上重放 26 个去上游化/品牌替换/鸿蒙适配补丁，再加对账/pin 适配修复 |
 
-旧线（上游 `316ded6` 基线、26 个补丁重放前）保留在 `ohos/sota-debrand` 分支
-（tip `edec2ef9`），主仓 master 与 fork 默认分支均停留于此。
+旧产品线（上游 `316ded6` 基线、26 个补丁重放前）保留在 `ohos/sota-debrand` 分支
+（tip `edec2ef9`）。主仓 master 已晋升新线（v0.11.829 基线 + 后续提交）；fork 的
+默认分支是 `ohos/electron37`（上游基线锚 `ohos-v1.0.0`），两者均不再随旧产品线走。
 
 electron 那边只有一个锚点：tag `ohos-v37.2.0` = 官方 fork 分支
 `electron-v37.2.0-openharmony` 的 HEAD（Chromium 138 + Node 22）。
