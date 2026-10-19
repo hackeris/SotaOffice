@@ -8,6 +8,7 @@
 | --- | --- | --- | --- | --- |
 | `genoffice/` | 应用本体 | `14a54c1e` | 工作分支 `ohos/sota-debrand-v0.11.829`，基线锚点 tag **`ohos-v1.0.1`** | `github.com/hackeris/genoffice` |
 | `electron/` | Electron 本体（HarmonyOS fork） | `3af8ccb` | tag **`ohos-v37.2.0`** | `gitcode.com/openharmony-sig/electron`（官方仓） |
+| `node-sqlite/` | node:sqlite 独立实现（NAPI addon 源，vendor 编译用） | `f529c62` | tag **`v3.3.0`** | `github.com/photostructure/node-sqlite`（上游，只读） |
 
 ## 应用仓库的两个锚点
 
@@ -24,6 +25,12 @@
 
 electron 那边只有一个锚点：tag `ohos-v37.2.0` = 官方 fork 分支
 `electron-v37.2.0-openharmony` 的 HEAD（Chromium 138 + Node 22）。
+
+`node-sqlite`（photostructure）是 `node:sqlite` 的 API 兼容独立实现。鸿蒙 fork 未编入
+内置 sqlite binding，且 C++ addon 在 OHOS 上不可活（`libace_napi.z.so` interpose 链接期
+`napi_*`，见 `genoffice` 的 `apps/shell/vendor/sqlite/build.sh` 文件头）——文件索引的
+`DatabaseSync` 由自研纯 C 绑定 `sota-sqlite` 提供（同 vendor 目录），本 submodule 只出
+`sqlite3.c/.h` amalgamation 源与编译 flags 参考。只读依赖，不 fork。
 
 ## 操作
 

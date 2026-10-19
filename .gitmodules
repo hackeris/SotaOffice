@@ -8,3 +8,7 @@
 	path = thirdparty/electron
 	url = https://gitcode.com/openharmony-sig/electron.git
 	branch = electron-v37.2.0-openharmony
+[submodule "thirdparty/node-sqlite"]
+	path = thirdparty/node-sqlite
+	url = https://github.com/photostructure/node-sqlite.git
+	branch = main

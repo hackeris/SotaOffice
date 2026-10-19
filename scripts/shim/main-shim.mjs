@@ -174,6 +174,32 @@ app.on('browser-window-created', (_e, win) => {
   }
 })
 
+// ---- ⑳ sqlite 原生绑定预加载(文件索引)----
+// fork(Node 22.17)未编入 node:sqlite 内置 binding。C++ addon 在此 fork 上不可活
+// (OHOS 的 libace_napi.z.so interpose 链接期 napi_* → abort,见
+// docs/appendix/C-hos-vscodium-runtime.md §7);最终方案 = 自研纯 C 绑定
+// sota-sqlite(genoffice vendor/sqlite,napi 全 dlsym 自 libelectron,probe.c
+// 真机验证通过)。JS 适配层在 resfile/app/node_modules/sota-sqlite/,由 store.ts
+// 回退分支 require。冒烟在桩内做一轮内存库读写,装机后日志直接可见成败。
+// 位置在 ⑪ launcher 之前是 R0/R1 二分实验的遗存——两个 .node 的 dlopen 先后
+// 已证无关(interpose 与顺序均排除),维持现状避免未验证组合。
+try {
+  const sqliteMod = { exports: {} }
+  process.dlopen(sqliteMod, path.join(NATIVE_LIBS_DIR, 'libsota_sqlite.node'))
+  globalThis.__sotaSqliteBinding = sqliteMod.exports
+  log(`stub: sqlite binding preloaded(${Object.keys(sqliteMod.exports).join('/')})`)
+  // 冒烟直接走原生扁平函数(DatabaseSync 形状在 node_modules/sota-sqlite 适配层)
+  const b = globalThis.__sotaSqliteBinding
+  const db = b.open(':memory:')
+  b.exec(db, 'CREATE TABLE t(k TEXT, v INTEGER)')
+  b.stmtRun(b.prepare(db, 'INSERT INTO t VALUES (?, ?)'), ['probe', 41])
+  const row = b.stmtGet(b.prepare(db, 'SELECT v+1 AS r FROM t WHERE k = ?'), ['probe'])
+  log(`stub: sqlite smoke row=${JSON.stringify(row)}`)
+  b.close(db)
+} catch (e) {
+  log(`sqlite binding 预加载/冒烟失败(文件索引将降级):${e?.message}`)
+}
+
 // ---- ⑪ Native 子进程启动器预加载(原 sidecar spawn 重映射已随可执行位退役)----
 // xlsx 引擎改走系统 Native 子进程机制:HAP 不带 executableBinaryPaths(平板拒装),
 // 主进程经本启动器拉起子进程、拿 socket fd 通信。fork 的 dlopen 只认 .node 后缀,

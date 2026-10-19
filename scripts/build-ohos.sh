@@ -111,7 +111,7 @@ done
 # Native 子进程件只在 GenOffice 模式组装(--selfcheck 不含 sheets,见 build-genoffice [3b/4]);
 # 断言不按模式门控时,自检回退通道在全新树上会直接 FATAL
 if [ "$APP_MODE" = "genoffice" ]; then
-  for f in "libs/arm64-v8a/libxlsx_sidecar.so" "libs/arm64-v8a/libxlsx_launcher.node"; do
+  for f in "libs/arm64-v8a/libxlsx_sidecar.so" "libs/arm64-v8a/libxlsx_launcher.node" "libs/arm64-v8a/libsota_sqlite.node"; do
     grep -q " $f\$" "$MANIFEST" || { echo "FATAL: HAP 缺关键件 $f(Native 子进程件组装疑点)" >&2; exit 1; }
   done
 fi

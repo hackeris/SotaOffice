@@ -108,6 +108,13 @@ if [ "$MODE" = "genoffice" ]; then
   # notices(packaged 分支 index.ts:4622 读;缺失则跳过——About 对话框内容,不阻塞)
   NOTICES=$(ls "$SRC"/apps/shell/build/THIRD-PARTY-NOTICES.txt 2>/dev/null || true)
   [ -n "$NOTICES" ] && cp -f "$NOTICES" "$RES_DIR/" || echo "    提示: 无 THIRD-PARTY-NOTICES.txt(跑 npm run notices 生成;About 页缺失,不阻塞)"
+  # sqlite 回退模块(主 bundle 里 require("sota-sqlite") 是运行时解析的字面量,
+  # bundle 期不被 alias——见 store.ts;最小 node_modules 布局让 Node 从 out/main
+  # 向上解析时命中。原生 binding 不在这里:shim 桩⑫ 预加载,见 [3b/4])
+  mkdir -p "$RES_DIR/app/node_modules/sota-sqlite"
+  cp -f "$SRC/apps/shell/vendor/sqlite/package.json" \
+        "$SRC/apps/shell/vendor/sqlite/index.cjs" \
+        "$RES_DIR/app/node_modules/sota-sqlite/"
 else
   cp -a "$SELFCHECK_APP/." "$RES_DIR/app/"
   mkdir -p "$RES_DIR/app/wasm" "$RES_DIR/wasm"
@@ -148,6 +155,18 @@ if [ "$MODE" = "genoffice" ]; then
     || { echo "FATAL: 启动壳构建失败" >&2; exit 1; }
   [ -s "entry/libs/arm64-v8a/libxlsx_launcher.node" ] \
     || { echo "FATAL: libxlsx_launcher.node 未就位" >&2; exit 1; }
+  # sqlite 原生绑定(纯 C,文件索引用;fork 未编入 node:sqlite 且 C++ addon 不可活,
+  # 见其 build.sh 头注释;shim 桩⑫ 预加载 + 冒烟)
+  if [ -f "$SRC/apps/shell/vendor/sqlite/libsota_sqlite.node" ]; then
+    echo "    sqlite 绑定已就位,跳过编译"
+  else
+    bash "$SRC/apps/shell/vendor/sqlite/build.sh" \
+      || { echo "FATAL: sqlite 绑定构建失败" >&2; exit 1; }
+  fi
+  cp -f "$SRC/apps/shell/vendor/sqlite/libsota_sqlite.node" "entry/libs/arm64-v8a/libsota_sqlite.node"
+  [ -s "entry/libs/arm64-v8a/libsota_sqlite.node" ] \
+    || { echo "FATAL: libsota_sqlite.node 未就位" >&2; exit 1; }
+  echo "    sqlite 绑定就位($(stat -c%s entry/libs/arm64-v8a/libsota_sqlite.node) bytes)"
 else
   echo "    自检模式:Native 子进程件不参与(自检 app 不含 sheets)"
 fi
@@ -158,8 +177,18 @@ SYMLINKS=$(find "$RES_DIR" -type l | head -3)
 [ -z "$SYMLINKS" ] || { echo "FATAL: 发现符号链接(HAP zip 不安全):$SYMLINKS" >&2; exit 1; }
 TSFILES=$(find "$RES_DIR" -name "*.ts" -type f | head -3)
 [ -z "$TSFILES" ] || { echo "FATAL: 发现 .ts 文件:$TSFILES" >&2; exit 1; }
-NMDIRS=$(find "$RES_DIR" -type d -name node_modules | head -3)
-[ -z "$NMDIRS" ] || { echo "FATAL: 发现 node_modules:$NMDIRS" >&2; exit 1; }
+# node_modules 卫生检查(两级白名单,仅 genoffice 模式——自检 app 无 node_modules,
+# 不按模式门控会炸坏 --selfcheck 排障通道):resfile 里 node_modules 只允许
+# app/node_modules 这一处,且其下只允许 sota-sqlite(纯 JS 两件套);任何其他
+# node_modules/包目录都拦
+if [ "$MODE" = "genoffice" ]; then
+  NMDIRS=$(find "$RES_DIR" -type d -name node_modules ! -path "*/app/node_modules" ! -path "*/app/node_modules/*" | head -3)
+  [ -z "$NMDIRS" ] || { echo "FATAL: 发现 node_modules:$NMDIRS" >&2; exit 1; }
+  EXTRAPKGS=$(find "$RES_DIR/app/node_modules" -mindepth 1 -maxdepth 1 ! -name sota-sqlite 2>/dev/null | head -3)
+  [ -z "$EXTRAPKGS" ] || { echo "FATAL: app/node_modules 下出现白名单外条目:$EXTRAPKGS" >&2; exit 1; }
+  [ -s "$RES_DIR/app/node_modules/sota-sqlite/index.cjs" ] \
+    || { echo "FATAL: sqlite 回退模块未组装" >&2; exit 1; }
+fi
 
 echo "==> [4/4] 断言"
 if [ "$MODE" = "genoffice" ]; then
