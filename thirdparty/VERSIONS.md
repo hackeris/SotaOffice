@@ -6,7 +6,7 @@
 
 | 目录 | 依赖 | 当前 commit | 锚点 | remote(fork) |
 | --- | --- | --- | --- | --- |
-| `genoffice/` | 应用本体 | `14a54c1e` | 工作分支 `ohos/sota-debrand-v0.11.829`，基线锚点 tag **`ohos-v1.0.1`** | `github.com/hackeris/genoffice` |
+| `genoffice/` | 应用本体 | `1b7178f5` | fork 默认分支 **`main`**（= 工作分支 `ohos/sota-debrand-v0.11.829`），基线锚点 tag **`ohos-v1.0.1`** | `github.com/hackeris/genoffice` |
 | `electron/` | Electron 本体（HarmonyOS fork） | `3af8ccb` | tag **`ohos-v37.2.0`** | `gitcode.com/openharmony-sig/electron`（官方仓） |
 | `node-sqlite/` | node:sqlite 独立实现（NAPI addon 源，vendor 编译用） | `f529c62` | tag **`v3.3.0`** | `github.com/photostructure/node-sqlite`（上游，只读） |
 
@@ -19,10 +19,12 @@
 | `339470d` | `ohos/electron37` | **`ohos-v1.0.0`** | 上游 `316ded6` + electron 37.2.0 pin（9 文件，与 `scripts/patches/genoffice-e37-pin.patch` 同源） |
 | `be0834fd` | `ohos/sota-debrand-v0.11.829` | **`ohos-v1.0.1`** | 上游 `4dc4b7b3`（v0.11.829 快照）+ electron 37.2.0 pin（9 文件，同上） |
 | `14a54c1e` | `ohos/sota-debrand-v0.11.829` | 无 | 在 `ohos-v1.0.1` 之上重放 26 个去上游化/品牌替换/鸿蒙适配补丁，再加对账/pin 适配修复 |
+| `1b7178f5` | `ohos/sota-debrand-v0.11.829` 与 **`main`** | 无 | 新线 tip：文件索引 sqlite 以自研纯 C 绑定复活（sota-sqlite，见 `apps/shell/vendor/sqlite/`） |
 
 旧产品线（上游 `316ded6` 基线、26 个补丁重放前）保留在 `ohos/sota-debrand` 分支
-（tip `edec2ef9`）。主仓 master 已晋升新线（v0.11.829 基线 + 后续提交）；fork 的
-默认分支是 `ohos/electron37`（上游基线锚 `ohos-v1.0.0`），两者均不再随旧产品线走。
+（tip `edec2ef9`）。主仓 master 与 fork 默认分支 `main` 均已晋升新线——`main` 是
+`ohos/sota-debrand-v0.11.829` 的快进别名，原本的上游 main 镜像被其覆盖（需要时
+可从上游重新拉取）；`ohos/electron37`（上游基线锚 `ohos-v1.0.0`）保留不动。
 
 electron 那边只有一个锚点：tag `ohos-v37.2.0` = 官方 fork 分支
 `electron-v37.2.0-openharmony` 的 HEAD（Chromium 138 + Node 22）。
@@ -52,8 +54,8 @@ git push origin <分支> && git push origin <tag>
 ```
 
 **应用仓库的校验命令当前会报 `no tag exactly matches`**——submodule 钉在
-`ohos/sota-debrand-v0.11.829` 的 `14a54c1e`（tag `ohos-v1.0.1` 之后的补丁 tip），补丁没有
-单独打 tag。这是预期状态，不是损坏；基线锚点用 `ohos-v1.0.1` 校验：
+`main`（= `ohos/sota-debrand-v0.11.829`）的 `1b7178f5`（tag `ohos-v1.0.1` 之后的补丁
+tip），补丁没有单独打 tag。这是预期状态，不是损坏；基线锚点用 `ohos-v1.0.1` 校验：
 
 ```sh
 git -C thirdparty/genoffice merge-base --is-ancestor ohos-v1.0.1 HEAD && echo ok
